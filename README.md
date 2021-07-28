@@ -35,6 +35,10 @@
 + Should we remove init() and start()? Or at least offer a `init_and_start()`.
 + Some nice error messages and reference number (e.g. E1032), similar to what Rust does
 
+# Feature request
++ Specify if you want calculators to run with async (1 thread), or spawn (multiple threads)
+    + Can be useful to debug calculators. Debugger only runs in main thread I think.
+
 # Fundamental issues to de-risk
 + Multi-threading can [break finalizers](https://docs.julialang.org/en/v1/manual/multi-threading/#Safe-use-of-Finalizers)
     + libraries that we'll use, e.g. OpenCV wrapper or CUDA.jl, will probably use

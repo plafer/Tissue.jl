@@ -7,11 +7,11 @@ The parent type of all calculators.
 """
 abstract type CalculatorBase end
 
-function open(calc::CalculatorBase) 
+function open(calc::CalculatorBase)
     # nothing
 end
 
-function close(calc::CalculatorBase) 
+function close(calc::CalculatorBase)
     # nothing
 end
 
@@ -33,7 +33,7 @@ function process(calc::CalculatorBase)
 end
 
 struct Frame
-    data
+    data::Any
     timestamp::Int64
 end
 
@@ -41,7 +41,7 @@ struct Packet
     """
     The data contained in the packet
     """
-    data
+    data::Any
     """
     The associated frame (that was initially written to the graph)
     """
@@ -82,7 +82,7 @@ Contract
 """
 function fetch_input_streams(cw::CalculatorWrapper)::Vector{Packet}
     # Wait until data is ready on all channels
-    for channel = cw.input_channels
+    for channel in cw.input_channels
         fetch(channel)
     end
 
@@ -110,7 +110,7 @@ function run_calculator(cw::CalculatorWrapper)
     while true
         in_packets::Vector{Packet} = fetch_input_streams(cw)
         frame = get_frame(in_packets[1])
-        
+
         out_value = nothing
         try
             out_value = process(get_calculator(cw), map(get_data, in_packets)...)
@@ -122,7 +122,7 @@ function run_calculator(cw::CalculatorWrapper)
 
         if out_value !== nothing
             out_packet = Packet(out_value, frame)
-            
+
             for out_channel in get_output_channels(cw)
                 put!(out_channel, out_packet)
             end
@@ -130,13 +130,16 @@ function run_calculator(cw::CalculatorWrapper)
     end
 end
 
-function resolve_process(calculator_datatype::DataType, streams::Vector{Symbol})::Vector{Channel}
-    process_methods_argnames::Vector{ Tuple{Method, Vector{Symbol}} } = begin
+function resolve_process(
+    calculator_datatype::DataType,
+    streams::Vector{Symbol},
+)::Vector{Channel}
+    process_methods_argnames::Vector{Tuple{Method,Vector{Symbol}}} = begin
         CALCULATOR_TYPE_IDX = 2
         process_methods = filter(methods(process).ms) do m
             return get(m.sig.parameters, CALCULATOR_TYPE_IDX, false) == calculator_datatype
         end
-        
+
         map(process_methods) do m
             argnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), m.slot_syms)
 
@@ -149,7 +152,7 @@ function resolve_process(calculator_datatype::DataType, streams::Vector{Symbol})
 end
 
 function init(graph::Graph)
-    @threads for calc_wrapper = graph.calculator_wrappers
+    @threads for calc_wrapper in graph.calculator_wrappers
         open(calc_wrapper.calculator)
     end
 end
