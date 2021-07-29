@@ -81,11 +81,6 @@ Contract
 + All returned packets refer to the same frame
 """
 function fetch_input_streams(cw::CalculatorWrapper)::Vector{Packet}
-    # Wait until data is ready on all channels
-    for channel in cw.input_channels
-        fetch(channel)
-    end
-
     packets = map(take!, cw.input_channels)
 
     # Drop old packets
@@ -95,7 +90,6 @@ function fetch_input_streams(cw::CalculatorWrapper)::Vector{Packet}
             packet = take!(cw.input_channels[idx])
         end
 
-        @assert get_frame_timestamp(packet) == newest_timestamp
         packets[idx] = packet
     end
 
