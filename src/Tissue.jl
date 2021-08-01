@@ -3,6 +3,12 @@ module Tissue
 import Base.Threads: @spawn, @threads, threadid
 
 """
+Period at which we should reevaluate the generator period (seconds)
+"""
+const GENERATOR_PERIOD_REEVAL_PERIOD = 1
+const GENERATOR_PERIOD_REEVAL_ALPHA = 0.9
+
+"""
 The parent type of all calculators.
 """
 abstract type CalculatorBase end
@@ -37,6 +43,10 @@ function get_output_channel(graph::Graph, channel_name::Symbol)::Channel
     graph.named_output_channels[channel_name]
 end
 
+"""
+Gracefully stops the graph. `wait_until_done()` should be called to block the main
+thread until the graph is stopped.
+"""
 function stop(graph::Graph)
     graph.done[] = true
 end
@@ -45,16 +55,28 @@ function is_done(graph::Graph)
     graph.done[]
 end
 
+"""
+Gets the period (in the sense of inverse frequency) at which the generator
+calculator should be called to generate new graph input stream packets.
+"""
+function get_generator_period(graph::Graph)::Float64
+    graph.gen_period[]
+end
+
+function set_generator_period(graph::Graph, period::Float64)
+    graph.gen_period[] = period
+end
+
 function wait_until_done(graph::Graph)
     # Wait on all tasks
-    for calculator_wrapper_task = graph.cw_tasks
+    for calculator_wrapper_task in graph.cw_tasks
         wait(calculator_wrapper_task)
     end
 
     graph.cw_tasks = Vector{Task}()
 
     # cleanup
-    for calculator = map(get_calculator, graph.calculator_wrappers)
+    for calculator in map(get_calculator, graph.calculator_wrappers)
         close(calculator)
     end
 
@@ -104,10 +126,32 @@ struct CalculatorWrapper
     All channels corresponding to the one output stream (one channel per subscriber)
     """
     output_channels::Vector{Channel}
+
+    """
+    Statistic about the (exponentially smoothed) execution time of the calculator's
+    `process()`.
+    """
+    exec_time::Threads.Atomic{Float64}
+
+    CalculatorWrapper(calc, input_channels, output_channels) =
+        new(calc, input_channels, output_channels, Threads.Atomic{Float64}(-1.0))
 end
 
 get_calculator(cw::CalculatorWrapper) = cw.calculator
 get_output_channels(cw::CalculatorWrapper)::Vector{Channel} = cw.output_channels
+
+get_exec_time(cw::CalculatorWrapper) = cw.exec_time[]
+
+function add_new_exec_time(cw::CalculatorWrapper, new_time::Float64)
+    current_time = get_exec_time(cw)
+    if current_time > 0.0
+        cw.exec_time[] =
+            GENERATOR_PERIOD_REEVAL_ALPHA * current_time +
+            (1 - GENERATOR_PERIOD_REEVAL_ALPHA) * new_time
+    else
+        cw.exec_time[] = new_time
+    end
+end
 
 """
 Blocks on all channels until data is available on all channels. 
@@ -157,7 +201,9 @@ function run_calculator(graph::Graph, cw::CalculatorWrapper)
         else
             out_value = nothing
             try
-                out_value = process(get_calculator(cw), map(get_data, in_packets)...)
+                stats = @timed process(get_calculator(cw), map(get_data, in_packets)...)
+                add_new_exec_time(cw, stats.time)
+                out_value = stats.value
             catch e
                 println("Error caught in process():\n$(e)")
                 stop(graph)
@@ -199,7 +245,8 @@ function resolve_process(
     # TODO: Finish implementing
 end
 
-function start_calculators(graph::Graph)
+function start(graph::Graph)
+    # Start calculators
     for calculator_wrapper in graph.calculator_wrappers
         t = @spawn begin
             run_calculator(graph, calculator_wrapper)
@@ -208,6 +255,7 @@ function start_calculators(graph::Graph)
         push!(graph.cw_tasks, t)
     end
 
+    # Start generator function
     @spawn begin
         while !is_done(graph)
             # TODO: Refactor (code dup with `run_calculator`)
@@ -222,15 +270,31 @@ function start_calculators(graph::Graph)
 
             if packet_data !== nothing
                 write(graph, packet_data)
-                # TODO: Sleep based on open + closed loop control
-                sleep(1.0 / 30.0)
+                period = max(0.001, get_generator_period(graph))
+                sleep(period)
             else
                 stop(graph)
                 break
             end
         end
-        
+
         write_done(graph)
+    end
+
+    # Start flow limiter period evaluation
+    @spawn begin
+        while !is_done(graph)
+            exec_times = map(get_exec_time, graph.calculator_wrappers)
+            println("Exec times: $(exec_times)")
+            if all(time -> time > 0.0, exec_times)
+                new_gen_period = max(exec_times...)
+                set_generator_period(graph, new_gen_period)
+
+                println("New gen period: $(new_gen_period)")
+            end
+
+            sleep(GENERATOR_PERIOD_REEVAL_PERIOD)
+        end
     end
 end
 

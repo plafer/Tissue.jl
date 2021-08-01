@@ -31,6 +31,11 @@
     + we need a mechanism to specify whether callbacks need to be run in UI thread
     or not.
 + If no callbacks are registered for a graph output stream, don't write to that channel
++ in `wait_until_done()`, also wait for all callback tasks to be done.
++ Add closed loop control in determining the sleep period for polling the generator
+    calculator.
+    + Technically, we could be polling too fast and filling up the `Channel` buffers.
++ Flow limiter: Initialized to 30fps, which may be way to fast for some systems.
 
 # Performance improvements
 + Don't use structs that have fields with abstract types, see [this](https://docs.julialang.org/en/v1/manual/performance-tips/#Avoid-fields-with-abstract-type)
@@ -50,6 +55,9 @@
         You need to `wait()` the task.
     + We should wait on all the tasks and when one of them returns exception,
         produce an error report that can be filed (well simply stack trace maybe).
++ Flow limiter: Have a `desired_rate` parameter, which we don't surpass.
++ Flow limiter: if a `process()` ran way slower all of a sudden for a couple of shots,
+    maybe send a message so that the generator rate is reevaluated.
 
 # Fundamental issues to de-risk
 + Multi-threading can [break finalizers](https://docs.julialang.org/en/v1/manual/multi-threading/#Safe-use-of-Finalizers)
@@ -72,8 +80,9 @@
 + Keep a moving average of time it took to run each `process()`. The max of all
     these times is the time at which you want to send your packets!
     (proof/argument to be documented)
-+ Each `CalculatorWrapper` has a `exec_time` field.
++ Each `CalculatorWrapper` has a `exec_time` field (atomic)
     + Update using exponential filter `exec_time = 0.9 * exec_time + 0.1 * new_time`
+    + At frequency X, a task computes the max of all times. Sets this as polling freq.
 
 ## Registering read callbacks & running them
 + Each output stream can have many callbacks registered
