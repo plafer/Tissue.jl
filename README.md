@@ -26,11 +26,11 @@
 + Some nice error messages and reference number (e.g. E1032), similar to what Rust does
 
 # Known issues
-+ Look into using `Threads.Atomic{Bool}` for `graph.done` flag.
 + Be clear as to whether `open()`, `process()`, `close()` live in `Base` or `Tissue`.
 + Some code needs to be run in the main thread (e.g. all UI operations in QT).
     + we need a mechanism to specify whether callbacks need to be run in UI thread
     or not.
++ If no callbacks are registered for a graph output stream, don't write to that channel
 
 # Performance improvements
 + Don't use structs that have fields with abstract types, see [this](https://docs.julialang.org/en/v1/manual/performance-tips/#Avoid-fields-with-abstract-type)
@@ -38,11 +38,6 @@
     + Solution: use `struct Frame{T <: AbstractType}` instead
 
 # Feature request
-+ Specify if you want calculators to run with async (1 thread), or spawn (multiple threads)
-    + Can be useful to debug calculators. Debugger only runs in main thread I think.
-+ User must specify which output stream will be polled (or register a callback)
-    + Otherwise data will accumulate forever in that Channel
-    + Similar to what mediapipe does
 + Precompile all `process()` methods that will be used?
     + Caused some question marks for me on the first run of `process()`
         of a bigger `process()` implementation (face detection).
@@ -55,16 +50,6 @@
         You need to `wait()` the task.
     + We should wait on all the tasks and when one of them returns exception,
         produce an error report that can be filed (well simply stack trace maybe).
-+ Flow limiter
-    + Related to how you read/write to graph. e.g. if you wait until you've read to
-    write again, then you won't ever need a flow limiter.
-    + But again, there's no point in reading the camera at 300x the fps
-    + These should be designed together. There needs to be a flow limiter, as well as
-    a producer limiter
-        + You give the callback as a user, and the framework calls it to get the next
-        "in" packet.
-    + Right now, the user throws away packets. But actually there's no point in
-    ever doing that! The point is to throw the packets WHILE `process()` is running!
 
 # Fundamental issues to de-risk
 + Multi-threading can [break finalizers](https://docs.julialang.org/en/v1/manual/multi-threading/#Safe-use-of-Finalizers)
@@ -87,6 +72,8 @@
 + Keep a moving average of time it took to run each `process()`. The max of all
     these times is the time at which you want to send your packets!
     (proof/argument to be documented)
++ Each `CalculatorWrapper` has a `exec_time` field.
+    + Update using exponential filter `exec_time = 0.9 * exec_time + 0.1 * new_time`
 
 ## Registering read callbacks & running them
 + Each output stream can have many callbacks registered

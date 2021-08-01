@@ -38,11 +38,11 @@ function get_output_channel(graph::Graph, channel_name::Symbol)::Channel
 end
 
 function stop(graph::Graph)
-    graph.done = true
+    graph.done[] = true
 end
 
 function is_done(graph::Graph)
-    graph.done
+    graph.done[]
 end
 
 function wait_until_done(graph::Graph)
