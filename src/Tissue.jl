@@ -1,6 +1,6 @@
 module Tissue
 
-import Base.Threads: @spawn, @threads
+import Base.Threads: @spawn, @threads, threadid
 
 """
 The parent type of all calculators.
@@ -11,9 +11,14 @@ function open(calc::CalculatorBase)
     # nothing
 end
 
+function process(calc::CalculatorBase)
+    throw("Called base process(). This shouldn't happen.")
+end
+
 function close(calc::CalculatorBase)
     # nothing
 end
+
 
 """
 The parent type of all graphs.
@@ -24,12 +29,36 @@ function get_input_channel(graph::Graph)::Channel
     graph.input_channel
 end
 
+function get_generator_calculator(graph::Graph)::CalculatorBase
+    graph.generator_calculator
+end
+
 function get_output_channel(graph::Graph, channel_name::Symbol)::Channel
     graph.named_output_channels[channel_name]
 end
 
-function process(calc::CalculatorBase)
-    throw("Called base process(). This shouldn't happen. Please submit a bug report.")
+function stop(graph::Graph)
+    graph.done = true
+end
+
+function is_done(graph::Graph)
+    graph.done
+end
+
+function wait_until_done(graph::Graph)
+    # Wait on all tasks
+    for calculator_wrapper_task = graph.cw_tasks
+        wait(calculator_wrapper_task)
+    end
+
+    graph.cw_tasks = Vector{Task}()
+
+    # cleanup
+    for calculator = map(get_calculator, graph.calculator_wrappers)
+        close(calculator)
+    end
+
+    close(graph.generator_calculator)
 end
 
 struct Frame
@@ -46,11 +75,20 @@ struct Packet
     The associated frame (that was initially written to the graph)
     """
     frame::Frame
+    """
+    Whether this is a DONE packet or not
+    """
+    done::Bool
+
+    # FIXME: ugly
+    Packet(frame::Frame) = new(nothing, frame, true)
+    Packet(data, frame::Frame) = new(data, frame, false)
 end
 
 get_frame_timestamp(p::Packet) = p.frame.timestamp
 get_frame(p::Packet) = p.frame
 get_data(p::Packet) = p.data
+is_done_packet(p::Packet) = p.done
 
 struct CalculatorWrapper
     calculator::CalculatorBase
@@ -96,34 +134,50 @@ function fetch_input_streams(cw::CalculatorWrapper)::Vector{Packet}
     return packets
 end
 
+
 """
 Monitors input streams, calls on the calculator to process the data, and forwards
 the return value in the output channel.
 """
-function run_calculator(cw::CalculatorWrapper)
-    while true
+function run_calculator(graph::Graph, cw::CalculatorWrapper)
+    # TODO: Refactor to make more readable
+
+    done = false
+    while !done
         in_packets::Vector{Packet} = fetch_input_streams(cw)
-        frame = get_frame(in_packets[1])
 
-        out_value = nothing
-        try
-            out_value = process(get_calculator(cw), map(get_data, in_packets)...)
-        catch e
-            println("Error caught in process():")
-            println(e)
-            exit(1)
-        end
-
-        if out_value !== nothing
-            out_packet = Packet(out_value, frame)
-
+        if all(is_done_packet, in_packets)
+            # Note: calculators will be `close()`d in the main thread
+            done_packet = in_packets[1]
             for out_channel in get_output_channels(cw)
-                put!(out_channel, out_packet)
+                put!(out_channel, done_packet)
+            end
+
+            done = true
+        else
+            out_value = nothing
+            try
+                out_value = process(get_calculator(cw), map(get_data, in_packets)...)
+            catch e
+                println("Error caught in process():\n$(e)")
+                stop(graph)
+                done = true
+            end
+
+            if !done && out_value !== nothing
+                frame = get_frame(in_packets[1])
+                out_packet = Packet(out_value, frame)
+
+                for out_channel in get_output_channels(cw)
+                    put!(out_channel, out_packet)
+                end
             end
         end
     end
 end
 
+# TODO: Finish implementing
+# This function will be used by the macros
 function resolve_process(
     calculator_datatype::DataType,
     streams::Vector{Symbol},
@@ -145,15 +199,38 @@ function resolve_process(
     # TODO: Finish implementing
 end
 
-function init(graph::Graph)
-    @threads for calc_wrapper in graph.calculator_wrappers
-        open(calc_wrapper.calculator)
-    end
-end
-
 function start_calculators(graph::Graph)
     for calculator_wrapper in graph.calculator_wrappers
-        @spawn run_calculator(calculator_wrapper)
+        t = @spawn begin
+            run_calculator(graph, calculator_wrapper)
+        end
+
+        push!(graph.cw_tasks, t)
+    end
+
+    @spawn begin
+        while !is_done(graph)
+            # TODO: Refactor (code dup with `run_calculator`)
+            packet_data = nothing
+            try
+                packet_data = process(graph.generator_calculator)
+            catch e
+                println("Error caught in generator's process():\n$(e)")
+                stop(graph)
+                break
+            end
+
+            if packet_data !== nothing
+                write(graph, packet_data)
+                # TODO: Sleep based on open + closed loop control
+                sleep(1.0 / 30.0)
+            else
+                stop(graph)
+                break
+            end
+        end
+        
+        write_done(graph)
     end
 end
 
@@ -170,7 +247,7 @@ end
 """
 Writes a value to the graph's input stream.
 """
-function write(graph::Graph, data)
+function write(graph::Graph, data::Any)
     # TODO: If graph is not started, throw exception
     timestamp = next_timestamp(graph)
     packet_frame = Frame(data, timestamp)
@@ -179,10 +256,35 @@ function write(graph::Graph, data)
 end
 
 """
-Reads a value from an output stream. Blocking.
+Writes a DONE packet to the graph's input stream.
 """
-function poll(graph::Graph, channel_name::Symbol)
-    take!(get_output_channel(graph, channel_name))
+function write_done(graph::Graph)
+    timestamp = next_timestamp(graph)
+    packet_frame = Frame(nothing, timestamp)
+    done_packet = Packet(packet_frame)
+    put!(get_input_channel(graph), done_packet)
+end
+
+"""
+Register a callback to a graph output stream.
+
+graph: the graph
+channel_name: the name of the output stream
+callback: function which takes 2 arguments: state, and Packet
+state: an object that will be passed back to your callback
+"""
+function register_callback(callback, graph::Graph, channel_name::Symbol, state)
+    @spawn begin
+        output_channel = get_output_channel(graph, channel_name)
+        while true
+            packet = take!(output_channel)
+            if is_done_packet(packet)
+                break
+            end
+
+            callback(state, packet)
+        end
+    end
 end
 
 end # module Tissue
