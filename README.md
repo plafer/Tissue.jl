@@ -12,18 +12,11 @@
     Q: Does the `resolve_process()` create the Channels? If so, then they need to be
     added in the `output_channels` list of the "connected" calculators.
 + graph macros
-    + Look into MacroTools.jl
+    + Look into MLStyle.jl (newer) and MacroTools.jl (older)
 + Deal with issue: we currently check the output type of `process()` to make sure it's correct.
     + Maybe we can let julia tell us somehow without crashing at runtime.
 + When we CTRL+C, catch it and exit without showing the crap julia shows us
     + Handle that exception, and exit gracefully
-+ Graph shutdown function
-    + Similar to MediaPipe's `graph.CloseInputStream()`.
-    + Think about how this interacts with `poll()`: e.g. `poll()` could return nothing
-    when graph is shutdown and nothing is being processed anymore.
-+ write() should throw exception if graph was not started
-+ Should we remove init() and start()? Or at least offer a `init_and_start()`.
-+ Some nice error messages and reference number (e.g. E1032), similar to what Rust does
 
 # Known issues
 + Be clear as to whether `open()`, `process()`, `close()` live in `Base` or `Tissue`.
@@ -58,6 +51,7 @@
 + Flow limiter: Have a `desired_rate` parameter, which we don't surpass.
 + Flow limiter: if a `process()` ran way slower all of a sudden for a couple of shots,
     maybe send a message so that the generator rate is reevaluated.
++ Some nice error messages and reference number (e.g. E1032), similar to what Rust does
 
 # Fundamental issues to de-risk
 + Multi-threading can [break finalizers](https://docs.julialang.org/en/v1/manual/multi-threading/#Safe-use-of-Finalizers)

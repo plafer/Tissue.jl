@@ -25,7 +25,6 @@ function close(calc::CalculatorBase)
     # nothing
 end
 
-
 """
 The parent type of all graphs.
 """
@@ -41,6 +40,26 @@ end
 
 function get_output_channel(graph::Graph, channel_name::Symbol)::Channel
     graph.named_output_channels[channel_name]
+end
+
+function get_calculator_wrappers(graph::Graph)
+    graph.calculator_wrappers
+end
+
+function get_cw_tasks(graph::Graph)
+    graph.cw_tasks
+end
+
+function set_cw_tasks(graph::Graph, cw_tasks::Vector{Task})
+    graph.cw_tasks = cw_tasks 
+end
+
+function get_next_timestamp(graph::Graph)
+    graph.next_timestamp
+end
+
+function set_next_timestamp(graph::Graph, next_ts)
+    graph.next_timestamp = next_ts
 end
 
 """
@@ -69,18 +88,18 @@ end
 
 function wait_until_done(graph::Graph)
     # Wait on all tasks
-    for calculator_wrapper_task in graph.cw_tasks
+    for calculator_wrapper_task in get_cw_tasks(graph)
         wait(calculator_wrapper_task)
     end
 
-    graph.cw_tasks = Vector{Task}()
+    set_cw_tasks(graph, Vector{Task}())
 
     # cleanup
-    for calculator in map(get_calculator, graph.calculator_wrappers)
+    for calculator in map(get_calculator, get_calculator_wrappers(graph))
         close(calculator)
     end
 
-    close(graph.generator_calculator)
+    close(get_generator_calculator(graph))
 end
 
 struct Frame
@@ -247,12 +266,12 @@ end
 
 function start(graph::Graph)
     # Start calculators
-    for calculator_wrapper in graph.calculator_wrappers
+    for calculator_wrapper in get_calculator_wrappers(graph)
         t = @spawn begin
             run_calculator(graph, calculator_wrapper)
         end
 
-        push!(graph.cw_tasks, t)
+        push!(get_cw_tasks(graph), t)
     end
 
     # Start generator function
@@ -261,7 +280,7 @@ function start(graph::Graph)
             # TODO: Refactor (code dup with `run_calculator`)
             packet_data = nothing
             try
-                packet_data = process(graph.generator_calculator)
+                packet_data = process(get_generator_calculator(graph))
             catch e
                 println("Error caught in generator's process():\n$(e)")
                 stop(graph)
@@ -284,13 +303,11 @@ function start(graph::Graph)
     # Start flow limiter period evaluation
     @spawn begin
         while !is_done(graph)
-            exec_times = map(get_exec_time, graph.calculator_wrappers)
-            println("Exec times: $(exec_times)")
+            exec_times = map(get_exec_time, get_calculator_wrappers(graph))
             if all(time -> time > 0.0, exec_times)
                 new_gen_period = max(exec_times...)
                 set_generator_period(graph, new_gen_period)
 
-                println("New gen period: $(new_gen_period)")
             end
 
             sleep(GENERATOR_PERIOD_REEVAL_PERIOD)
@@ -301,11 +318,11 @@ end
 """
 Return and increments timestamp.
 """
-function next_timestamp(graph::Graph)
-    next = graph.next_timestamp
-    graph.next_timestamp += 1
+function inc_next_timestamp(graph::Graph)
+    next_ts = get_next_timestamp(graph)
+    set_next_timestamp(graph, next_ts + 1)
 
-    next
+    next_ts
 end
 
 """
@@ -313,7 +330,7 @@ Writes a value to the graph's input stream.
 """
 function write(graph::Graph, data::Any)
     # TODO: If graph is not started, throw exception
-    timestamp = next_timestamp(graph)
+    timestamp = inc_next_timestamp(graph)
     packet_frame = Frame(data, timestamp)
     packet = Packet(data, packet_frame)
     put!(get_input_channel(graph), packet)
@@ -323,7 +340,7 @@ end
 Writes a DONE packet to the graph's input stream.
 """
 function write_done(graph::Graph)
-    timestamp = next_timestamp(graph)
+    timestamp = inc_next_timestamp(graph)
     packet_frame = Frame(nothing, timestamp)
     done_packet = Packet(packet_frame)
     put!(get_input_channel(graph), done_packet)
