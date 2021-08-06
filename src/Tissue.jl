@@ -1,6 +1,7 @@
 module Tissue
 
 import Base.Threads: @spawn, @threads, threadid
+using MLStyle
 
 """
 Period at which we should reevaluate the generator period (seconds)
@@ -329,7 +330,6 @@ end
 Writes a value to the graph's input stream.
 """
 function write(graph::Graph, data::Any)
-    # TODO: If graph is not started, throw exception
     timestamp = inc_next_timestamp(graph)
     packet_frame = Frame(data, timestamp)
     packet = Packet(data, packet_frame)
@@ -366,6 +366,151 @@ function register_callback(callback, graph::Graph, channel_name::Symbol, state)
             callback(state, packet)
         end
     end
+end
+
+
+##############################
+# MACROS
+##############################
+
+function _graph(graph_name, init_block)
+    GraphName = esc(graph_name)
+
+    calcs_var = esc(:calcs)
+    named_output_channels_var = esc(:named_output_channels)
+    gen_calc_var = esc(:gen_calc)
+
+    return quote
+        struct $GraphName <: Graph
+            input_channel::Channel
+            named_output_channels::Dict{Symbol, Any}
+            generator_calculator::CalculatorBase
+            calculator_wrappers::Vector{CalculatorWrapper}
+            cw_tasks::Vector{Task}
+            next_timestamp::Int64
+            done::Threads.Atomic{Bool}
+            gen_period::Threads.Atomic{Float64}
+
+            function $GraphName()
+                # calcs[:cc1] = (Dict(), [])
+                # first (dict): in channels :in => channel
+                # second (vector): out channels [channel1, channel2]
+                $calcs_var = Dict{Symbol, Any}()
+                $named_output_channels_var = Dict{Symbol, Any}()
+                $gen_calc_var = nothing
+
+                $(esc(init_block))
+
+                if $gen_calc_var === nothing
+                    # TODO: switch back to @error
+                    println("You need to specify a generator calculator. See @generatorcalculator.")
+                end
+                # TODO: new() statement
+            end
+        end
+    end
+end
+
+macro graph(graph_name, init_block)
+    return _graph(graph_name, init_block)
+end
+
+function _generatorcalculator(assign_expr)
+    return esc(quote
+        gen_calc = $assign_expr
+    end)
+end
+macro generatorcalculator(assign_expr)
+    return _generatorcalculator(assign_expr)
+end
+
+function _calculator(assign_expr)
+    # TODO: replace println by @error
+    calculator_symbol = @match assign_expr begin
+        :($calc = $rest) => calc
+        _ => println("Error!")
+    end
+
+    calcs_var = esc(:calcs)
+    return quote
+        $calcs_var[$(QuoteNode(calculator_symbol))] = (Dict(), [])
+        $(esc(assign_expr))
+    end
+end
+
+macro calculator(assign_expr)
+    return _calculator(assign_expr)
+end
+
+function _defoutputstream(stream_name, user_calc_var)
+    calcs_var = esc(:calcs)
+    named_output_channels_var = esc(:named_output_channels)
+
+    return quote
+        ch = Channel(32)
+        push!($calcs_var[$(QuoteNode(user_calc_var))][2], ch)
+        $named_output_channels_var[$(esc(stream_name))] = ch
+    end
+end
+
+macro defoutputstream(stream_name, user_calc_var)
+    return _defoutputstream(stream_name, user_calc_var)
+end
+
+
+"""
+Captures the pattern `calc->stream` into a tuple (calc, stream)
+"""
+function _capture_calculator_stream(ex)
+    # FIXME: What if we need the LineNodes somewhere?
+    @match Base.remove_linenums!(ex) begin
+        Expr(:->, calc, Expr(:block, stream)) => (calc, stream)
+    end
+end
+
+# Captures the pattern `c1 => c2->in` into a tuple `(c1, (c2, in))`.
+function _capture_big_arrow(ex)
+    @match ex begin
+        Expr(:call, :(=>), outcalc, stream_arrow_ex) => 
+            (outcalc, _capture_calculator_stream(stream_arrow_ex))
+    end  
+end
+
+# [c3->in, c4->in, ...] => ((c3,in), (c4, in), ...)
+function _match_elements(ex)
+    @match ex begin
+        [] => ()
+        [first, rest...] =>
+            (_capture_calculator_stream(first), _match_elements(rest)...)
+    end
+end
+
+function _defstreams(ex)
+    # e.g. For input: c1 => c2->in_stream, c3->other_in_stream
+    # streams == (:c1, (:c2, :in_stream), (:c3, :other_in_stream))
+    streams = @match ex begin
+        Expr(:tuple, big_arrow_ex, other_streams...) => 
+            (_capture_big_arrow(big_arrow_ex)..., _match_elements(other_streams)...)
+        ex => _capture_big_arrow(ex)
+    end
+
+    source_calc = QuoteNode(streams[1])
+    calcs_var = esc(:calcs)
+
+    return quote
+        for (calc, in_stream) = $streams[2:end]
+            channel = Channel(32)
+            # Add to output channel
+            push!($calcs_var[$source_calc][2], channel)
+
+            # Add to input channel
+            $calcs_var[calc][1][in_stream] = channel
+        end
+    end
+end
+
+macro defstreams(ex)
+    return _defstreams(ex)
 end
 
 end # module Tissue

@@ -3,6 +3,9 @@ uuid = "d793e989-9861-40a6-8a6f-c6c683623071"
 authors = ["Philippe Laferriere <laferriere.phil@gmail.com> and contributors"]
 version = "0.1.0"
 
+[deps]
+MLStyle = "d8e11817-5142-5d16-987a-aa16d5891078"
+
 [compat]
 julia = "1"
 
