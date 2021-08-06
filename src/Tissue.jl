@@ -412,7 +412,17 @@ function _graph(graph_name, init_block)
                     # TODO: switch back to @error
                     println("You need to specify an input channel. See @definputstream.")
                 end
-                # TODO: new() statement
+
+                new(
+                    $input_channel_var,
+                    $named_output_channels_var,
+                    $gen_calc_var,
+                    [], # TODO: calculator_wrappers
+                    [],
+                    0,
+                    Threads.Atomic{Bool}(false),
+                    Threads.Atomic{Float64}(1.0/30.0)
+                )
             end
         end
     end
