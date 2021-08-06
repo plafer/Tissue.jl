@@ -379,6 +379,7 @@ function _graph(graph_name, init_block)
     calcs_var = esc(:calcs)
     named_output_channels_var = esc(:named_output_channels)
     gen_calc_var = esc(:gen_calc)
+    input_channel_var = esc(:input_channel)
 
     return quote
         struct $GraphName <: Graph
@@ -395,6 +396,7 @@ function _graph(graph_name, init_block)
                 # calcs[:cc1] = (Dict(), [])
                 # first (dict): in channels :in => channel
                 # second (vector): out channels [channel1, channel2]
+                $input_channel_var = nothing
                 $calcs_var = Dict{Symbol, Any}()
                 $named_output_channels_var = Dict{Symbol, Any}()
                 $gen_calc_var = nothing
@@ -404,6 +406,11 @@ function _graph(graph_name, init_block)
                 if $gen_calc_var === nothing
                     # TODO: switch back to @error
                     println("You need to specify a generator calculator. See @generatorcalculator.")
+                end
+
+                if $input_channel_var === nothing
+                    # TODO: switch back to @error
+                    println("You need to specify an input channel. See @definputstream.")
                 end
                 # TODO: new() statement
             end
@@ -440,6 +447,23 @@ end
 
 macro calculator(assign_expr)
     return _calculator(assign_expr)
+end
+
+function _definputstream(ex)
+    calc, stream = _capture_calculator_stream(ex)
+
+    calcs_var = esc(:calcs)
+    input_channel_var = esc(:input_channel)
+
+    return quote
+        ch = Channel(32)
+        $input_channel_var = ch
+        $calcs_var[$(QuoteNode(calc))][1][$(QuoteNode(stream))] = ch
+    end
+end
+
+macro definputstream(ex)
+    return _definputstream(ex)
 end
 
 function _defoutputstream(stream_name, user_calc_var)

@@ -11,8 +11,6 @@
     the `argnames` symbols.
     Q: Does the `resolve_process()` create the Channels? If so, then they need to be
     added in the `output_channels` list of the "connected" calculators.
-+ graph macros
-    + Look into MLStyle.jl (newer) and MacroTools.jl (older)
 + Deal with issue: we currently check the output type of `process()` to make sure it's correct.
     + Maybe we can let julia tell us somehow without crashing at runtime.
 + When we CTRL+C, catch it and exit without showing the crap julia shows us
@@ -52,6 +50,10 @@
 + Flow limiter: if a `process()` ran way slower all of a sudden for a couple of shots,
     maybe send a message so that the generator rate is reevaluated.
 + Some nice error messages and reference number (e.g. E1032), similar to what Rust does
++ Generator calculator and @definputstream is ugly. The generator calculator is not
+    a calculator, because we don't want to collect run time stats on it, so we need
+    a separate code path
+    + Find a better abstraction.
 
 # Fundamental issues to de-risk
 + Multi-threading can [break finalizers](https://docs.julialang.org/en/v1/manual/multi-threading/#Safe-use-of-Finalizers)
@@ -119,3 +121,12 @@
 
 # On error in an output stream callback...
 + just let the whole thing crash for now.
+
+# @definputstream
+```julia
+    @definputstream cc1->in_ch
+
+    ch = Channel(32)
+    input_channel = ch
+    calcs[:cc1][:in_ch] = ch
+```
