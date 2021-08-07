@@ -242,29 +242,6 @@ function run_calculator(graph::Graph, cw::CalculatorWrapper)
     end
 end
 
-# TODO: Finish implementing
-# This function will be used by the macros
-function resolve_process(
-    calculator_datatype::DataType,
-    streams::Vector{Symbol},
-)::Vector{Channel}
-    process_methods_argnames::Vector{Tuple{Method,Vector{Symbol}}} = begin
-        CALCULATOR_TYPE_IDX = 2
-        process_methods = filter(methods(process).ms) do m
-            return get(m.sig.parameters, CALCULATOR_TYPE_IDX, false) == calculator_datatype
-        end
-
-        map(process_methods) do m
-            argnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), m.slot_syms)
-
-            # The first argname is Symbol("#self#"). We skip it.
-            return (m, argnames[2:m.nargs])
-        end
-    end # process_methods_argnames
-
-    # TODO: Finish implementing
-end
-
 function start(graph::Graph)
     # Start calculators
     for calculator_wrapper in get_calculator_wrappers(graph)
@@ -373,6 +350,43 @@ end
 # MACROS
 ##############################
 
+# This needs to be called at runtime, because we need type information
+function resolve_process(
+    calculator_datatype::DataType,
+    input_streams
+)::Vector{Channel}
+    process_methods_argnames::Vector{Vector{Symbol}} = begin
+        CALCULATOR_TYPE_IDX = 2
+        process_methods = filter(methods(process).ms) do m
+            if length(m.sig.parameters) >= 2
+                return m.sig.parameters[CALCULATOR_TYPE_IDX] == calculator_datatype
+            end
+
+            return false
+        end
+
+        map(process_methods) do m
+            argnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), m.slot_syms)
+
+            # The first argname is Symbol("#self#"). We skip it.
+            # The second argname is the calculator. We skip it.
+            return argnames[3:m.nargs]
+        end
+    end # process_methods_argnames
+
+    input_stream_names::Base.KeySet = keys(input_streams)
+
+    for method_argnames = process_methods_argnames
+        if input_stream_names == Set(method_argnames)
+            # we found our `process()` method!
+            input_channels = [input_streams[argname] for argname = method_argnames]
+            return input_channels
+        end
+    end
+
+    throw("Could not resolve process() for type $calculator_datatype and input streams $input_streams")
+end
+
 function _graph(graph_name, init_block)
     GraphName = esc(graph_name)
 
@@ -382,7 +396,7 @@ function _graph(graph_name, init_block)
     input_channel_var = esc(:input_channel)
 
     return quote
-        struct $GraphName <: Graph
+        mutable struct $GraphName <: Graph
             input_channel::Channel
             named_output_channels::Dict{Symbol, Any}
             generator_calculator::CalculatorBase
@@ -399,10 +413,11 @@ function _graph(graph_name, init_block)
                 $input_channel_var = nothing
                 $calcs_var = Dict{Symbol, Any}()
                 $named_output_channels_var = Dict{Symbol, Any}()
+                calculator_wrappers = []
                 $gen_calc_var = nothing
 
                 $(esc(init_block))
-
+                
                 if $gen_calc_var === nothing
                     # TODO: switch back to @error
                     println("You need to specify a generator calculator. See @generatorcalculator.")
@@ -413,11 +428,26 @@ function _graph(graph_name, init_block)
                     println("You need to specify an input channel. See @definputstream.")
                 end
 
+                calculator_wrappers = []
+                for pair = $calcs_var
+                    calc_sym, (input_channels_dict, output_channels, calc) = pair
+                    
+                    input_channels = resolve_process(typeof(calc), input_channels_dict)
+
+                    if input_channels === nothing
+                        # TODO: switch back to @error
+                        println("Couldn't find process()")
+                    end
+
+                    cw = CalculatorWrapper(calc, input_channels, output_channels)
+                    push!(calculator_wrappers, cw)
+                end
+
                 new(
                     $input_channel_var,
                     $named_output_channels_var,
                     $gen_calc_var,
-                    [], # TODO: calculator_wrappers
+                    calculator_wrappers,
                     [],
                     0,
                     Threads.Atomic{Bool}(false),
@@ -433,8 +463,12 @@ macro graph(graph_name, init_block)
 end
 
 function _generatorcalculator(assign_expr)
+    ctor = @match assign_expr begin
+        :($var = $ctor) => ctor
+    end
+
     return esc(quote
-        gen_calc = $assign_expr
+        gen_calc = $ctor
     end)
 end
 macro generatorcalculator(assign_expr)
@@ -443,15 +477,15 @@ end
 
 function _calculator(assign_expr)
     # TODO: replace println by @error
-    calculator_symbol = @match assign_expr begin
+    calc = @match assign_expr begin
         :($calc = $rest) => calc
         _ => println("Error!")
     end
 
     calcs_var = esc(:calcs)
     return quote
-        $calcs_var[$(QuoteNode(calculator_symbol))] = (Dict(), [])
         $(esc(assign_expr))
+        $calcs_var[$(QuoteNode(calc))] = (Dict(), [], $(esc(calc)))
     end
 end
 
@@ -476,13 +510,13 @@ macro definputstream(ex)
     return _definputstream(ex)
 end
 
-function _defoutputstream(stream_name, user_calc_var)
+function _defoutputstream(stream_name, calc)
     calcs_var = esc(:calcs)
     named_output_channels_var = esc(:named_output_channels)
 
     return quote
         ch = Channel(32)
-        push!($calcs_var[$(QuoteNode(user_calc_var))][2], ch)
+        push!($calcs_var[$(QuoteNode(calc))][2], ch)
         $named_output_channels_var[$(esc(stream_name))] = ch
     end
 end
@@ -538,6 +572,7 @@ function _defstreams(ex)
             push!($calcs_var[$source_calc][2], channel)
 
             # Add to input channel
+            # TODO: How to generate: println("calcs: $calcs") ?
             $calcs_var[calc][1][in_stream] = channel
         end
     end
