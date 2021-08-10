@@ -1,20 +1,18 @@
 # To implement
++ Separate `Tissue.jl` into multiple files, and export symbols.
 + Check the return type of `process()` and confirm that types match
     with calculators that are plugged into the output stream.
     + Use `Core.Compiler.return_type(function, args_tuple)
         + Gives what the compiler thinks will return given 
     + See https://discourse.julialang.org/t/can-i-get-the-declared-return-type-of-a-method/43575/19
 
-+ Tissue.resolve_process()
-    + for each Method, look at the argnames symbols. For a process() to be resolved,
-    there needs to be a one-to-one correspondence between the `streams` symbols, and
-    the `argnames` symbols.
-    Q: Does the `resolve_process()` create the Channels? If so, then they need to be
-    added in the `output_channels` list of the "connected" calculators.
 + Deal with issue: we currently check the output type of `process()` to make sure it's correct.
     + Maybe we can let julia tell us somehow without crashing at runtime.
 + When we CTRL+C, catch it and exit without showing the crap julia shows us
     + Handle that exception, and exit gracefully
++ Make sure the implementation is free of data races.
+    + Any data that is written by a thread and read by others should be protected
+    by lock or atomic operation.
 
 # Known issues
 + Be clear as to whether `open()`, `process()`, `close()` live in `Base` or `Tissue`.
@@ -26,7 +24,6 @@
 + Add closed loop control in determining the sleep period for polling the generator
     calculator.
     + Technically, we could be polling too fast and filling up the `Channel` buffers.
-+ Flow limiter: Initialized to 30fps, which may be way to fast for some systems.
 
 # Performance improvements
 + Don't use structs that have fields with abstract types, see [this](https://docs.julialang.org/en/v1/manual/performance-tips/#Avoid-fields-with-abstract-type)
@@ -122,11 +119,26 @@
 # On error in an output stream callback...
 + just let the whole thing crash for now.
 
-# @definputstream
-```julia
-    @definputstream cc1->in_ch
+# Flow limiter boostrapping
+Send the first packet in. After it arrived at all output streams, run the first flow limiter period evaluation pass.
 
-    ch = Channel(32)
-    input_channel = ch
-    calcs[:cc1][:in_ch] = ch
-```
+1. In `start()`, don't start the flow limiter period evaluation right away. Instead, start the task that will watch all output streams, and once bootstrapped, start the current flow limiter task.
+2. `register_callback()` can add a Channel to task in 1 (or inform in some way that this outputstream has a cb registered)
+
+`register_callback` increments a counter. decrement on packet in channel. When counter reaches back to 0, wake up the task.
++ task gets an 
+
+## Tasks
+1. bootstrap task
+    + waits on `cond` until all packets have arrived at output streams
+    + evaluate period
+    + Launch flow limiter evaluation period task
+2. generator task
+    + Reads packet from generator calculator
+        + Handles errors
+    + Writes packet to graph
+    + Hangs until it's time to read again
+        + `period` if bootstrapped
+        + after packet reaches all outputs if bootstrapping
+3. Flow limiter period evaluation
+    + determine and set the new generator period

@@ -63,6 +63,29 @@ function set_next_timestamp(graph::Graph, next_ts)
     graph.next_timestamp = next_ts
 end
 
+function inc_num_virgin_output_streams(graph::Graph)
+    graph.num_virgin_output_streams[] += 1
+end
+
+function dec_num_virgin_output_streams(graph::Graph)
+    graph.num_virgin_output_streams[] -= 1
+end
+
+"""
+A virgin output stream is one which has not received a packet yet.
+"""
+function get_num_virgin_output_streams(graph::Graph)
+    graph.num_virgin_output_streams[]
+end
+
+function get_flow_limiter_bootstrap_lock(graph::Graph)
+    graph.bootstrap_lock
+end
+
+function get_flow_limiter_bootstrap_cond(graph::Graph)
+    graph.bootstrap_cond
+end
+
 """
 Gracefully stops the graph. `wait_until_done()` should be called to block the main
 thread until the graph is stopped.
@@ -84,7 +107,8 @@ function get_generator_period(graph::Graph)::Float64
 end
 
 function set_generator_period(graph::Graph, period::Float64)
-    graph.gen_period[] = period
+    MIN_SLEEPABLE_TIME = 0.001
+    graph.gen_period[] = max(MIN_SLEEPABLE_TIME, period)
 end
 
 function wait_until_done(graph::Graph)
@@ -242,6 +266,40 @@ function run_calculator(graph::Graph, cw::CalculatorWrapper)
     end
 end
 
+"""
+Evaluates the flow limiter period (i.e. the amount of time to sleep in between fetching new packets from the generator calculator)
+"""
+function evaluate_packet_period(graph)
+    exec_times = map(get_exec_time, get_calculator_wrappers(graph))
+    if all(time -> time > 0.0, exec_times)
+        new_gen_period = max(exec_times...)
+        set_generator_period(graph, new_gen_period)
+    end
+end
+
+"""
+Generates a packet using the generator calculator and writes it to the graph.
+
+Returns true if generate and write were successful, false if not, in which case the graph is stopped.
+
+"""
+function generate_packet_and_write(graph::Graph)::Bool
+    packet_data = nothing
+    try
+        packet_data = process(get_generator_calculator(graph))
+    catch e
+        println("Error caught in generator's process():\n$e")
+    end
+
+    if packet_data === nothing
+        stop(graph)
+        return false
+    end
+
+    write(graph, packet_data)
+    return true
+end
+
 function start(graph::Graph)
     # Start calculators
     for calculator_wrapper in get_calculator_wrappers(graph)
@@ -252,45 +310,54 @@ function start(graph::Graph)
         push!(get_cw_tasks(graph), t)
     end
 
-    # Start generator function
-    @spawn begin
-        while !is_done(graph)
-            # TODO: Refactor (code dup with `run_calculator`)
-            packet_data = nothing
-            try
-                packet_data = process(get_generator_calculator(graph))
-            catch e
-                println("Error caught in generator's process():\n$(e)")
-                stop(graph)
-                break
-            end
-
-            if packet_data !== nothing
-                write(graph, packet_data)
-                period = max(0.001, get_generator_period(graph))
-                sleep(period)
-            else
-                stop(graph)
-                break
-            end
-        end
-
-        write_done(graph)
+    # Generate the first packet 
+    success = generate_packet_and_write(graph)
+    if !success
+        return
     end
 
-    # Start flow limiter period evaluation
+    # Start bootstrap
     @spawn begin
-        while !is_done(graph)
-            exec_times = map(get_exec_time, get_calculator_wrappers(graph))
-            if all(time -> time > 0.0, exec_times)
-                new_gen_period = max(exec_times...)
-                set_generator_period(graph, new_gen_period)
+        lk = get_flow_limiter_bootstrap_lock(graph)
+        cond = get_flow_limiter_bootstrap_cond(graph)
 
+        lock(lk)
+        try
+            while get_num_virgin_output_streams(graph) > 0
+                println("Waiting on cond")
+                wait(cond)
+                println("woke up from cond")
+            end
+        finally
+            unlock(lk)
+        end
+        
+        println("Evaluating packet period")
+        evaluate_packet_period(graph)
+
+        # Start generator function
+        @spawn begin
+            while !is_done(graph)
+                if generate_packet_and_write(graph)
+                    sleep(get_generator_period(graph))
+                else
+                    break
+                end
             end
 
-            sleep(GENERATOR_PERIOD_REEVAL_PERIOD)
+            write_done(graph)
+        end
+
+        # Start flow limiter period evaluation
+        @spawn begin
+            while !is_done(graph)
+                sleep(GENERATOR_PERIOD_REEVAL_PERIOD)
+                evaluate_packet_period(graph)
+            end
         end
     end
+
+
 end
 
 """
@@ -332,10 +399,28 @@ callback: function which takes 2 arguments: state, and Packet
 state: an object that will be passed back to your callback
 """
 function register_callback(callback, graph::Graph, channel_name::Symbol, state)
+    inc_num_virgin_output_streams(graph)
+
+    # TODO: If graph is started, throw error.
     @spawn begin
         output_channel = get_output_channel(graph, channel_name)
         while true
             packet = take!(output_channel)
+
+            # Check if bootstrap just finished
+            dec_num_virgin_output_streams(graph)
+            if get_num_virgin_output_streams(graph) == 0
+                lk = get_flow_limiter_bootstrap_lock(graph)
+
+                lock(lk)
+                # Generator period bootstrap just ended
+                num_tasks_waiting = notify(get_flow_limiter_bootstrap_cond(graph))
+                unlock(lk)
+                if num_tasks_waiting == 0
+                    @error("Generator bootstrap ended but no task was waiting.")
+                end
+            end
+
             if is_done_packet(packet)
                 break
             end
@@ -405,6 +490,9 @@ function _graph(graph_name, init_block)
             next_timestamp::Int64
             done::Threads.Atomic{Bool}
             gen_period::Threads.Atomic{Float64}
+            num_virgin_output_streams::Threads.Atomic{Int64}
+            bootstrap_lock::Base.ReentrantLock
+            bootstrap_cond::Threads.Condition
 
             function $GraphName()
                 # calcs[:cc1] = (Dict(), [])
@@ -442,7 +530,8 @@ function _graph(graph_name, init_block)
                     cw = CalculatorWrapper(calc, input_channels, output_channels)
                     push!(calculator_wrappers, cw)
                 end
-
+                
+                lk = Base.ReentrantLock()
                 new(
                     $input_channel_var,
                     $named_output_channels_var,
@@ -451,7 +540,10 @@ function _graph(graph_name, init_block)
                     [],
                     0,
                     Threads.Atomic{Bool}(false),
-                    Threads.Atomic{Float64}(1.0/30.0)
+                    Threads.Atomic{Float64}(0.0),
+                    Threads.Atomic{Int64}(0),
+                    lk,
+                    Threads.Condition(lk),
                 )
             end
         end
