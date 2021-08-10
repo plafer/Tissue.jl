@@ -3,6 +3,10 @@ module Tissue
 import Base.Threads: @spawn, @threads, threadid
 using MLStyle
 
+export CalculatorBase, get_data
+export @graph, @calculator, @defstreams, @defoutputstream, @definputstream,
+       @generatorcalculator
+
 """
 Period at which we should reevaluate the generator period (seconds)
 """
@@ -324,15 +328,12 @@ function start(graph::Graph)
         lock(lk)
         try
             while get_num_virgin_output_streams(graph) > 0
-                println("Waiting on cond")
                 wait(cond)
-                println("woke up from cond")
             end
         finally
             unlock(lk)
         end
         
-        println("Evaluating packet period")
         evaluate_packet_period(graph)
 
         # Start generator function

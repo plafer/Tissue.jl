@@ -24,6 +24,7 @@
 + Add closed loop control in determining the sleep period for polling the generator
     calculator.
     + Technically, we could be polling too fast and filling up the `Channel` buffers.
++ Flow limiter: the initial bootstrap takes into account the compilation time.
 
 # Performance improvements
 + Don't use structs that have fields with abstract types, see [this](https://docs.julialang.org/en/v1/manual/performance-tips/#Avoid-fields-with-abstract-type)
