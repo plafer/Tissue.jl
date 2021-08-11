@@ -29,6 +29,7 @@
     + What if I want to consume the output all within calculators (e.g. display it and that's it)?
     + We could patch it up simply by putting a sink to any output stream which has no callback registered.
     + Or maybe we'd want to do all the work within graphs, and have no output streams?
++ No stacktrace when we get an error in a `process()`. Makes it harder to debug
 # Performance improvements
 + Don't use structs that have fields with abstract types, see [this](https://docs.julialang.org/en/v1/manual/performance-tips/#Avoid-fields-with-abstract-type)
     + e.g. Frame
