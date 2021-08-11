@@ -3,7 +3,7 @@ module Tissue
 import Base.Threads: @spawn, @threads, threadid
 using MLStyle
 
-export CalculatorBase, get_data
+export CalculatorBase, get_data, register_callback, start, wait_until_done
 export @graph, @calculator, @defstreams, @defoutputstream, @definputstream,
        @generatorcalculator
 
@@ -35,8 +35,8 @@ The parent type of all graphs.
 """
 abstract type Graph end
 
-function get_input_channel(graph::Graph)::Channel
-    graph.input_channel
+function get_input_channels(graph::Graph)::Vector{Channel}
+    graph.input_channels
 end
 
 function get_generator_calculator(graph::Graph)::CalculatorBase
@@ -378,7 +378,10 @@ function write(graph::Graph, data::Any)
     timestamp = inc_next_timestamp(graph)
     packet_frame = Frame(data, timestamp)
     packet = Packet(data, packet_frame)
-    put!(get_input_channel(graph), packet)
+
+    for channel = get_input_channels(graph)
+        put!(channel, packet)
+    end
 end
 
 """
@@ -388,7 +391,10 @@ function write_done(graph::Graph)
     timestamp = inc_next_timestamp(graph)
     packet_frame = Frame(nothing, timestamp)
     done_packet = Packet(packet_frame)
-    put!(get_input_channel(graph), done_packet)
+
+    for channel = get_input_channels(graph)
+        put!(channel, done_packet)
+    end
 end
 
 """
@@ -479,11 +485,11 @@ function _graph(graph_name, init_block)
     calcs_var = esc(:calcs)
     named_output_channels_var = esc(:named_output_channels)
     gen_calc_var = esc(:gen_calc)
-    input_channel_var = esc(:input_channel)
+    input_channels_var = esc(:input_channels)
 
     return quote
         mutable struct $GraphName <: Graph
-            input_channel::Channel
+            input_channels::Vector{Channel}
             named_output_channels::Dict{Symbol, Any}
             generator_calculator::CalculatorBase
             calculator_wrappers::Vector{CalculatorWrapper}
@@ -499,7 +505,7 @@ function _graph(graph_name, init_block)
                 # calcs[:cc1] = (Dict(), [])
                 # first (dict): in channels :in => channel
                 # second (vector): out channels [channel1, channel2]
-                $input_channel_var = nothing
+                $input_channels_var = Vector{Channel}()
                 $calcs_var = Dict{Symbol, Any}()
                 $named_output_channels_var = Dict{Symbol, Any}()
                 calculator_wrappers = []
@@ -512,9 +518,9 @@ function _graph(graph_name, init_block)
                     println("You need to specify a generator calculator. See @generatorcalculator.")
                 end
 
-                if $input_channel_var === nothing
+                if isempty($input_channels_var)
                     # TODO: switch back to @error
-                    println("You need to specify an input channel. See @definputstream.")
+                    println("You need to specify at least one input channel. See @definputstream.")
                 end
 
                 calculator_wrappers = []
@@ -534,7 +540,7 @@ function _graph(graph_name, init_block)
                 
                 lk = Base.ReentrantLock()
                 new(
-                    $input_channel_var,
+                    $input_channels_var,
                     $named_output_channels_var,
                     $gen_calc_var,
                     calculator_wrappers,
@@ -590,11 +596,11 @@ function _definputstream(ex)
     calc, stream = _capture_calculator_stream(ex)
 
     calcs_var = esc(:calcs)
-    input_channel_var = esc(:input_channel)
+    input_channels_var = esc(:input_channels)
 
     return quote
         ch = Channel(32)
-        $input_channel_var = ch
+        push!($input_channels_var, ch)
         $calcs_var[$(QuoteNode(calc))][1][$(QuoteNode(stream))] = ch
     end
 end
