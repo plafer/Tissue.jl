@@ -11,7 +11,7 @@ export @graph, @calculator, @defstreams, @defoutputstream, @definputstream,
 Period at which we should reevaluate the generator period (seconds)
 """
 const GENERATOR_PERIOD_REEVAL_PERIOD = 1
-const GENERATOR_PERIOD_REEVAL_ALPHA = 0.9
+const GENERATOR_PERIOD_REEVAL_ALPHA = 0.95
 
 """
 The parent type of all calculators.
@@ -436,6 +436,8 @@ function register_callback(callback, graph::Graph, channel_name::Symbol, state)
             callback(state, packet)
         end
     end
+
+    nothing
 end
 
 
