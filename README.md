@@ -29,7 +29,9 @@
     + What if I want to consume the output all within calculators (e.g. display it and that's it)?
     + We could patch it up simply by putting a sink to any output stream which has no callback registered.
     + Or maybe we'd want to do all the work within graphs, and have no output streams?
-+ No stacktrace when we get an error in a `process()`. Makes it harder to debug
++ Bootstrap: the initial flow estimate is very much an underestimate, and the graph takes a few seconds to get to its limiting fps.
++ BUG: If a packet is dropped on the first run of a graph, the graph just hangs.
+    + Take into consideration when redesigning the bootstrap
 # Performance improvements
 + Don't use structs that have fields with abstract types, see [this](https://docs.julialang.org/en/v1/manual/performance-tips/#Avoid-fields-with-abstract-type)
     + e.g. Frame
@@ -56,6 +58,8 @@
     a calculator, because we don't want to collect run time stats on it, so we need
     a separate code path
     + Find a better abstraction.
++ Debug mechanism for when your graph just hangs
+    + Perhaps a trace of which `process()` gets called and what not so you can see right away which part is hanging.
 
 # Fundamental issues to de-risk
 + Multi-threading can [break finalizers](https://docs.julialang.org/en/v1/manual/multi-threading/#Safe-use-of-Finalizers)
@@ -69,6 +73,10 @@
 # Crazy ideas or are they
 + Build a GUI that lets you generate the scaffolding for a given graph structure
 + Build a tracer that lets you visualize packets traveling through the graph, and a timeline similar to MediaPipe
++ New syntax for `@graph`.
+    + The current syntax is "output stream" based. A better syntax perhaps would focus on the input streams.
+    + e.g. `@bindstreams renderer in_frame:g confidence_boxes:face_detector`
+        + It's way easier to spot bugs in the graph structure, and to see in one glance which `process()` will be resolved.
 
 # Decisions
 + About the immutability of packets

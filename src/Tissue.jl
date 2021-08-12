@@ -3,7 +3,7 @@ module Tissue
 import Base.Threads: @spawn, @threads, threadid
 using MLStyle
 
-export CalculatorBase, get_data, register_callback, start, wait_until_done
+export CalculatorBase, get_data, register_callback, start, stop, wait_until_done
 export @graph, @calculator, @defstreams, @defoutputstream, @definputstream,
        @generatorcalculator
 
@@ -253,7 +253,8 @@ function run_calculator(graph::Graph, cw::CalculatorWrapper)
                 add_new_exec_time(cw, stats.time)
                 out_value = stats.value
             catch e
-                println("Error caught in process():\n$(e)")
+                println("Error caught in process():$e :")
+                display(stacktrace(catch_backtrace()))
                 stop(graph)
                 done = true
             end
