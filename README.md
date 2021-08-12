@@ -15,6 +15,12 @@
     by lock or atomic operation.
 
 # Known issues
++ There is currently no way to dynamically change the parameters of the calculator in a graph (e.g. pass as command line argument)
+    + `@graph` is defined in "global scope", so the whole struct is defined by the time the first line of code executes.
+    + Solution 1: Introduce `@parameter p1` which adds an argument `p1` to the constructor
+    + Solution 2: `@graph TestGraph(p1, p2) begin ... end`
+        + Defines the form of the constructor
+        + What if I want multiple constructors? Possibly make use of "outside constructors"
 + Be clear as to whether `open()`, `process()`, `close()` live in `Base` or `Tissue`.
 + Some code needs to be run in the main thread (e.g. all UI operations in QT).
     + we need a mechanism to specify whether callbacks need to be run in UI thread
