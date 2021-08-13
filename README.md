@@ -21,7 +21,7 @@
     + Solution 2: `@graph TestGraph(p1, p2) begin ... end`
         + Defines the form of the constructor
         + What if I want multiple constructors? Possibly make use of "outside constructors"
-+ Be clear as to whether `open()`, `process()`, `close()` live in `Base` or `Tissue`.
++ Be clear as to whether `process()`, `close()` live in `Base` or `Tissue`.
 + Some code needs to be run in the main thread (e.g. all UI operations in QT).
     + we need a mechanism to specify whether callbacks need to be run in UI thread
     or not.
