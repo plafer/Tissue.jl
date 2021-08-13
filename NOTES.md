@@ -82,7 +82,7 @@
 # Crazy ideas or are they
 + Build a GUI that lets you generate the scaffolding for a given graph structure
 + Build a tracer that lets you visualize packets traveling through the graph, and a timeline similar to MediaPipe
-+ New syntax for `@graph`.
++ New macro to define streams: `@bindstreams`.
     + The current syntax is "output stream" based. A better syntax perhaps would focus on the input streams.
     + e.g. `@bindstreams renderer in_frame:g confidence_boxes:face_detector`
         + It's way easier to spot bugs in the graph structure, and to see in one glance which `process()` will be resolved.
