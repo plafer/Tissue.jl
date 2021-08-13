@@ -76,6 +76,13 @@
     thread. 
         + Feature is coming.
 
+# Questions
++ Do we want all computation to be done in a calculator?
+    + As opposed to registering a callback to output stream
+    + Currently the flow limiter doesn't apply to registered callbacks, so the flow limiter doesn't see callbacks.
+        + If a callback is slow, packets will accumulate.
+    + But maybe we don't want the callback stuff to be accounted for in the flow limiter? Somehow if we'd want to e.g. show an image right until the next shows up? But that's what we do now and the task is not blocked... Anyhow, I think it should be accounted for.
+
 # Crazy ideas or are they
 + Build a GUI that lets you generate the scaffolding for a given graph structure
 + Build a tracer that lets you visualize packets traveling through the graph, and a timeline similar to MediaPipe
