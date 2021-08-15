@@ -2,7 +2,7 @@
 Period at which we should reevaluate the generator period (seconds)
 """
 const GENERATOR_PERIOD_REEVAL_PERIOD = 1
-const GENERATOR_PERIOD_REEVAL_ALPHA = 0.95
+const GENERATOR_PERIOD_REEVAL_ALPHA = 0.1
 
 struct Frame
     data::Any
