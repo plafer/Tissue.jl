@@ -51,19 +51,29 @@ struct CalculatorWrapper
     "Whether the wrapped calculator is a sink calculator"
     is_sink::Bool
 
+    "Whether the resolved process method has a `graph` keyword parameter"
+    process_has_graph_kw::Bool
+
     """
     Statistic about the (exponentially smoothed) execution time of the calculator's
     `process()`.
     """
     exec_time::Threads.Atomic{Float64}
 
-    CalculatorWrapper(calc, input_channels, output_channels, is_sink) =
-        new(calc, input_channels, output_channels, is_sink, Threads.Atomic{Float64}(-1.0))
+    CalculatorWrapper(calc, input_channels, output_channels, is_sink, has_graph_kw) = new(
+        calc,
+        input_channels,
+        output_channels,
+        is_sink,
+        has_graph_kw,
+        Threads.Atomic{Float64}(-1.0),
+    )
 end
 
 get_calculator(cw::CalculatorWrapper) = cw.calculator
 get_output_channels(cw::CalculatorWrapper)::Vector{Channel} = cw.output_channels
 is_sink(cw::CalculatorWrapper) = cw.is_sink
+process_has_graph_kw(cw::CalculatorWrapper) = cw.process_has_graph_kw
 get_exec_time(cw::CalculatorWrapper) = cw.exec_time[]
 
 function add_new_exec_time(cw::CalculatorWrapper, new_time::Float64)
@@ -134,7 +144,12 @@ function run_calculator(graph::Graph, cw::CalculatorWrapper)
         else
             out_value = nothing
             try
-                stats = @timed process(get_calculator(cw), map(get_data, in_packets)...)
+                stats = nothing
+                if process_has_graph_kw(cw)
+                    stats = @timed process(get_calculator(cw), map(get_data, in_packets)..., graph = graph)
+                else
+                    stats = @timed process(get_calculator(cw), map(get_data, in_packets)...)
+                end
                 add_new_exec_time(cw, stats.time)
                 out_value = stats.value
             catch e
@@ -222,7 +237,7 @@ function start(graph::Graph)
         finally
             unlock(lk)
         end
-        
+
         evaluate_packet_period(graph)
 
         # Start generator function
@@ -268,7 +283,7 @@ function write(graph::Graph, data::Any)
     packet_frame = Frame(data, timestamp)
     packet = Packet(data, packet_frame)
 
-    for channel = get_input_channels(graph)
+    for channel in get_input_channels(graph)
         put!(channel, packet)
     end
 end
@@ -281,7 +296,7 @@ function write_done(graph::Graph)
     packet_frame = Frame(nothing, timestamp)
     done_packet = Packet(packet_frame)
 
-    for channel = get_input_channels(graph)
+    for channel in get_input_channels(graph)
         put!(channel, done_packet)
     end
 end

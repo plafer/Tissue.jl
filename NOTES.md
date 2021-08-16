@@ -175,16 +175,6 @@ Send the first packet in. After it arrived at all output streams, run the first 
     + Treated differently internally: compute the time for process, but subtract that from the offset
         + so that if it takes 1ms to read from camera, start 1ms before the graph can start handling it.
     + Then, `@inputstream` goes away entirely.
-+ Packet consumption: output stream
-    + goes away entirely as well
-    + A graph then encompasses how the output is consumed
-    + What if you want to simply change how the output is consumed?
-        + I think subgraphs will be the way to do it.
-        + Wouldn't it better though if I could just plug in someone else's graph, because it outputs
-        useful information? So graphs don't even need to be designed to be reusable.
-            + well partially true. I can write my graph so that it doesn't use output streams. So
-            it must be designed anyways.
-            + so if someone thinks a graph can be reused, they should write it as a subgraph.
 + Bootstrapping will also need to change, as we no longer have output streams.
     + just by looking at your `CalculatorWrapper`'s output streams, you can know which is a "terminal calculator".
     + How to avoid the `return nothing` bootstrap bug?
@@ -196,6 +186,3 @@ Send the first packet in. After it arrived at all output streams, run the first 
         then
             1. record that the current frame notified the bootstrapping task
             2. notify the bootstrapping task (so that it can send a new packet)
-
-+ Output stream removal
-    + Now, `process()` functions will need a reference to their graph so that they can stop it.

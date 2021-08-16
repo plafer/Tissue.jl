@@ -3,7 +3,7 @@ module Tissue
 import Base.Threads: @spawn, @threads, threadid
 using MLStyle
 
-export CalculatorBase, get_data, register_callback, start, stop, wait_until_done
+export Graph, CalculatorBase, get_data, register_callback, start, stop, wait_until_done
 export @graph, @calculator, @defstreams, @defoutputstream, @definputstream,
        @generatorcalculator
 

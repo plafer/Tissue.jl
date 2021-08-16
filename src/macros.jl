@@ -1,11 +1,12 @@
 function resolve_process(
     calculator_datatype::DataType,
-    input_streams
-)::Vector{Channel}
-    process_methods_argnames::Vector{Vector{Symbol}} = begin
+    input_streams,
+)::Tuple{Vector{Channel},Bool}
+    argnames_and_has_graph = begin
         CALCULATOR_TYPE_IDX = 2
+        # TODO: use filter(collect(methods(process)))
         process_methods = filter(methods(process).ms) do m
-            if length(m.sig.parameters) >= 2
+            if length(m.sig.parameters) >= CALCULATOR_TYPE_IDX
                 return m.sig.parameters[CALCULATOR_TYPE_IDX] == calculator_datatype
             end
 
@@ -17,21 +18,29 @@ function resolve_process(
 
             # The first argname is Symbol("#self#"). We skip it.
             # The second argname is the calculator. We skip it.
-            return argnames[3:m.nargs]
+            # :graph is a special keyword argument. 
+            argnames_of_interest = argnames[3:m.nargs]
+            kw_args = argnames[m.nargs:end]
+            (
+                argnames_of_interest,
+                :graph in kw_args,
+            )
         end
     end # process_methods_argnames
 
     input_stream_names::Base.KeySet = keys(input_streams)
 
-    for method_argnames = process_methods_argnames
+    for (method_argnames, wants_graph) in argnames_and_has_graph
         if input_stream_names == Set(method_argnames)
             # we found our `process()` method!
-            input_channels = [input_streams[argname] for argname = method_argnames]
-            return input_channels
+            input_channels = [input_streams[argname] for argname in method_argnames]
+            return (input_channels, wants_graph)
         end
     end
 
-    throw("Could not resolve process() for type $calculator_datatype and input streams $input_streams")
+    throw(
+        "Could not resolve process() for type $calculator_datatype and input streams $input_streams",
+    )
 end
 
 function _graph(graph_name, init_block)
@@ -45,7 +54,7 @@ function _graph(graph_name, init_block)
     return quote
         mutable struct $GraphName <: Graph
             input_channels::Vector{Channel}
-            named_output_channels::Dict{Symbol, Any}
+            named_output_channels::Dict{Symbol,Any}
             generator_calculator::CalculatorBase
             calculator_wrappers::Vector{CalculatorWrapper}
             cw_tasks::Vector{Task}
@@ -62,43 +71,54 @@ function _graph(graph_name, init_block)
                 # first (dict): in channels :in => channel
                 # second (vector): out channels [channel1, channel2]
                 $input_channels_var = Vector{Channel}()
-                $calcs_var = Dict{Symbol, Any}()
-                $named_output_channels_var = Dict{Symbol, Any}()
+                $calcs_var = Dict{Symbol,Any}()
+                $named_output_channels_var = Dict{Symbol,Any}()
                 calculator_wrappers = []
                 $gen_calc_var = nothing
 
                 $(esc(init_block))
-                
+
                 if $gen_calc_var === nothing
-                    @error("You need to specify a generator calculator. See @generatorcalculator.")
+                    @error(
+                        "You need to specify a generator calculator. See @generatorcalculator."
+                    )
                 end
 
                 if isempty($input_channels_var)
-                    @error("You need to specify at least one input channel. See @definputstream.")
+                    @error(
+                        "You need to specify at least one input channel. See @definputstream."
+                    )
                 end
 
                 calculator_wrappers = []
                 num_sinks_not_init = 0
-                for pair = $calcs_var
+                for pair in $calcs_var
                     calc_sym, (input_channels_dict, output_channels, calc) = pair
-                    
-                    input_channels = resolve_process(typeof(calc), input_channels_dict)
+
+                    input_channels, has_graph_kw =
+                        resolve_process(typeof(calc), input_channels_dict)
 
                     if input_channels === nothing
                         @error("Couldn't find process()")
                     end
-                    
+
                     is_sink_calculator = false
                     if isempty(output_channels)
                         is_sink_calculator = true
                         num_sinks_not_init += 1
                     end
 
-                    cw = CalculatorWrapper(calc, input_channels, output_channels, is_sink_calculator)
+                    cw = CalculatorWrapper(
+                        calc,
+                        input_channels,
+                        output_channels,
+                        is_sink_calculator,
+                        has_graph_kw,
+                    )
                     push!(calculator_wrappers, cw)
                 end
 
-                
+
                 lk = Base.ReentrantLock()
                 new(
                     $input_channels_var,
@@ -199,17 +219,16 @@ end
 # Captures the pattern `c1 => c2->in` into a tuple `(c1, (c2, in))`.
 function _capture_big_arrow(ex)
     @match ex begin
-        Expr(:call, :(=>), outcalc, stream_arrow_ex) => 
+        Expr(:call, :(=>), outcalc, stream_arrow_ex) =>
             (outcalc, _capture_calculator_stream(stream_arrow_ex))
-    end  
+    end
 end
 
 # [c3->in, c4->in, ...] => ((c3,in), (c4, in), ...)
 function _match_elements(ex)
     @match ex begin
         [] => ()
-        [first, rest...] =>
-            (_capture_calculator_stream(first), _match_elements(rest)...)
+        [first, rest...] => (_capture_calculator_stream(first), _match_elements(rest)...)
     end
 end
 
@@ -217,7 +236,7 @@ function _defstreams(ex)
     # e.g. For input: c1 => c2->in_stream, c3->other_in_stream
     # streams == (:c1, (:c2, :in_stream), (:c3, :other_in_stream))
     streams = @match ex begin
-        Expr(:tuple, big_arrow_ex, other_streams...) => 
+        Expr(:tuple, big_arrow_ex, other_streams...) =>
             (_capture_big_arrow(big_arrow_ex)..., _match_elements(other_streams)...)
         ex => _capture_big_arrow(ex)
     end
@@ -226,13 +245,12 @@ function _defstreams(ex)
     calcs_var = esc(:calcs)
 
     return quote
-        for (calc, in_stream) = $streams[2:end]
+        for (calc, in_stream) in $streams[2:end]
             channel = Channel(32)
             # Add to output channel
             push!($calcs_var[$source_calc][2], channel)
 
             # Add to input channel
-            # TODO: How to generate: println("calcs: $calcs") ?
             $calcs_var[calc][1][in_stream] = channel
         end
     end
