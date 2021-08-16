@@ -192,7 +192,8 @@ Returns true if generate and write were successful, false if not, in which case 
 function generate_packet_and_write(graph::Graph)::Bool
     packet_data = nothing
     try
-        packet_data = process(get_generator_calculator(graph))
+        generator_cw = get_generator_calculator_wrapper(graph)
+        packet_data = process(get_calculator(generator_cw))
     catch e
         println("Error caught in generator's process():\n$e")
     end
@@ -211,11 +212,12 @@ function start(graph::Graph)
 
     # Start calculators
     for calculator_wrapper in get_calculator_wrappers(graph)
-        t = @spawn begin
-            run_calculator(graph, calculator_wrapper)
+        if calculator_wrapper != get_generator_calculator_wrapper(graph)
+            t = @spawn begin
+                run_calculator(graph, calculator_wrapper)
+            end
+            push!(get_cw_tasks(graph), t)
         end
-
-        push!(get_cw_tasks(graph), t)
     end
 
     # Generate the first packet 
@@ -283,7 +285,7 @@ function write(graph::Graph, data::Any)
     packet_frame = Frame(data, timestamp)
     packet = Packet(data, packet_frame)
 
-    for channel in get_input_channels(graph)
+    for channel in get_output_channels(get_generator_calculator_wrapper(graph))
         put!(channel, packet)
     end
 end
@@ -296,7 +298,7 @@ function write_done(graph::Graph)
     packet_frame = Frame(nothing, timestamp)
     done_packet = Packet(packet_frame)
 
-    for channel in get_input_channels(graph)
+    for channel in get_output_channels(get_generator_calculator_wrapper(graph))
         put!(channel, done_packet)
     end
 end

@@ -3,11 +3,8 @@ The parent type of all graphs.
 """
 abstract type Graph end
 
-function get_input_channels(graph::Graph)::Vector{Channel}
-    graph.input_channels
-end
-
-function get_generator_calculator(graph::Graph)::CalculatorBase
+function get_generator_calculator_wrapper(graph::Graph)::CalculatorWrapper
+    # FIXME: Change name to wrapper
     graph.generator_calculator
 end
 
@@ -105,6 +102,4 @@ function wait_until_done(graph::Graph)
     for calculator in map(get_calculator, get_calculator_wrappers(graph))
         close(calculator)
     end
-
-    close(get_generator_calculator(graph))
 end

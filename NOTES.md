@@ -168,21 +168,3 @@ Send the first packet in. After it arrived at all output streams, run the first 
         + after packet reaches all outputs if bootstrapping
 3. Flow limiter period evaluation
     + determine and set the new generator period
-
-## Generator calculator, input and output streams redesign
-+ Packet generation
-    + Defined implicitly: only one calculator can/must be input-less.
-    + Treated differently internally: compute the time for process, but subtract that from the offset
-        + so that if it takes 1ms to read from camera, start 1ms before the graph can start handling it.
-    + Then, `@inputstream` goes away entirely.
-+ Bootstrapping will also need to change, as we no longer have output streams.
-    + just by looking at your `CalculatorWrapper`'s output streams, you can know which is a "terminal calculator".
-    + How to avoid the `return nothing` bootstrap bug?
-        + Bootstrapping assumption: all terminal calculators receive a packet on the first run.
-        + Solution: if 
-            1. a packet calculator returns nothing, 
-            2. we didn't bootstrap yet, 
-            3. no task with the current frame notified the bootstrapping task
-        then
-            1. record that the current frame notified the bootstrapping task
-            2. notify the bootstrapping task (so that it can send a new packet)

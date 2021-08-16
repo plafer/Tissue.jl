@@ -1,4 +1,4 @@
-function resolve_process(
+function resolve_process_method(
     calculator_datatype::DataType,
     input_streams,
 )::Tuple{Vector{Channel},Bool}
@@ -49,13 +49,11 @@ function _graph(graph_name, init_block)
     calcs_var = esc(:calcs)
     named_output_channels_var = esc(:named_output_channels)
     gen_calc_var = esc(:gen_calc)
-    input_channels_var = esc(:input_channels)
 
     return quote
         mutable struct $GraphName <: Graph
-            input_channels::Vector{Channel}
             named_output_channels::Dict{Symbol,Any}
-            generator_calculator::CalculatorBase
+            generator_calculator::CalculatorWrapper
             calculator_wrappers::Vector{CalculatorWrapper}
             cw_tasks::Vector{Task}
             next_timestamp::Int64
@@ -70,7 +68,6 @@ function _graph(graph_name, init_block)
                 # calcs[:cc1] = (Dict(), [])
                 # first (dict): in channels :in => channel
                 # second (vector): out channels [channel1, channel2]
-                $input_channels_var = Vector{Channel}()
                 $calcs_var = Dict{Symbol,Any}()
                 $named_output_channels_var = Dict{Symbol,Any}()
                 calculator_wrappers = []
@@ -78,25 +75,13 @@ function _graph(graph_name, init_block)
 
                 $(esc(init_block))
 
-                if $gen_calc_var === nothing
-                    @error(
-                        "You need to specify a generator calculator. See @generatorcalculator."
-                    )
-                end
-
-                if isempty($input_channels_var)
-                    @error(
-                        "You need to specify at least one input channel. See @definputstream."
-                    )
-                end
-
                 calculator_wrappers = []
                 num_sinks_not_init = 0
                 for pair in $calcs_var
                     calc_sym, (input_channels_dict, output_channels, calc) = pair
 
                     input_channels, has_graph_kw =
-                        resolve_process(typeof(calc), input_channels_dict)
+                        resolve_process_method(typeof(calc), input_channels_dict)
 
                     if input_channels === nothing
                         @error("Couldn't find process()")
@@ -116,12 +101,22 @@ function _graph(graph_name, init_block)
                         has_graph_kw,
                     )
                     push!(calculator_wrappers, cw)
+
+                    if isempty(input_channels_dict)
+                        if $gen_calc_var !== nothing
+                            @error("More than 1 generator calculators are defined. You must define one and only one.")
+                        end
+                        $gen_calc_var = cw
+                    end
+
                 end
 
+                if $gen_calc_var === nothing
+                    @error("No generator calculator defined. You must specify one and only one.")
+                end
 
                 lk = Base.ReentrantLock()
                 new(
-                    $input_channels_var,
                     $named_output_channels_var,
                     $gen_calc_var,
                     calculator_wrappers,
@@ -143,19 +138,6 @@ macro graph(graph_name, init_block)
     return _graph(graph_name, init_block)
 end
 
-function _generatorcalculator(assign_expr)
-    ctor = @match assign_expr begin
-        :($var = $ctor) => ctor
-    end
-
-    return esc(quote
-        gen_calc = $ctor
-    end)
-end
-macro generatorcalculator(assign_expr)
-    return _generatorcalculator(assign_expr)
-end
-
 function _calculator(assign_expr)
     calc = @match assign_expr begin
         :($calc = $rest) => calc
@@ -172,39 +154,6 @@ end
 macro calculator(assign_expr)
     return _calculator(assign_expr)
 end
-
-function _definputstream(ex)
-    calc, stream = _capture_calculator_stream(ex)
-
-    calcs_var = esc(:calcs)
-    input_channels_var = esc(:input_channels)
-
-    return quote
-        ch = Channel(32)
-        push!($input_channels_var, ch)
-        $calcs_var[$(QuoteNode(calc))][1][$(QuoteNode(stream))] = ch
-    end
-end
-
-macro definputstream(ex)
-    return _definputstream(ex)
-end
-
-function _defoutputstream(stream_name, calc)
-    calcs_var = esc(:calcs)
-    named_output_channels_var = esc(:named_output_channels)
-
-    return quote
-        ch = Channel(32)
-        push!($calcs_var[$(QuoteNode(calc))][2], ch)
-        $named_output_channels_var[$(esc(stream_name))] = ch
-    end
-end
-
-macro defoutputstream(stream_name, user_calc_var)
-    return _defoutputstream(stream_name, user_calc_var)
-end
-
 
 """
 Captures the pattern `calc->stream` into a tuple (calc, stream)
