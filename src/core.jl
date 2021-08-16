@@ -192,6 +192,8 @@ function generate_packet_and_write(graph::Graph)::Bool
 end
 
 function start(graph::Graph)
+    # TODO: If already started, error
+
     # Start calculators
     for calculator_wrapper in get_calculator_wrappers(graph)
         t = @spawn begin

@@ -197,10 +197,5 @@ Send the first packet in. After it arrived at all output streams, run the first 
             1. record that the current frame notified the bootstrapping task
             2. notify the bootstrapping task (so that it can send a new packet)
 
-+ Output stream
-    + Data structures
-        + CW: add a flag :is_sink.
-        + graph: add an Int field :sinks_not_init
-    + In constructor, while looping constructing all CWs, if `output_channels` is empty, then set the `:is_sink` flag to true, and increment sink counter
-        + Construct the graph with sink counter
-    + In `run_calculator`, after `fetch_input_streams`, if CW.is_sink, then decrement the graph's `sink_not_init` count. If count == 0, signal condition var.
++ Output stream removal
+    + Now, `process()` functions will need a reference to their graph so that they can stop it.
