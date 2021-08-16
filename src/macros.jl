@@ -70,13 +70,11 @@ function _graph(graph_name, init_block)
                 $(esc(init_block))
                 
                 if $gen_calc_var === nothing
-                    # TODO: switch back to @error
-                    println("You need to specify a generator calculator. See @generatorcalculator.")
+                    @error("You need to specify a generator calculator. See @generatorcalculator.")
                 end
 
                 if isempty($input_channels_var)
-                    # TODO: switch back to @error
-                    println("You need to specify at least one input channel. See @definputstream.")
+                    @error("You need to specify at least one input channel. See @definputstream.")
                 end
 
                 calculator_wrappers = []
@@ -87,8 +85,7 @@ function _graph(graph_name, init_block)
                     input_channels = resolve_process(typeof(calc), input_channels_dict)
 
                     if input_channels === nothing
-                        # TODO: switch back to @error
-                        println("Couldn't find process()")
+                        @error("Couldn't find process()")
                     end
                     
                     is_sink_calculator = false
@@ -140,10 +137,9 @@ macro generatorcalculator(assign_expr)
 end
 
 function _calculator(assign_expr)
-    # TODO: replace println by @error
     calc = @match assign_expr begin
         :($calc = $rest) => calc
-        _ => println("Error!")
+        _ => @error("Error!")
     end
 
     calcs_var = esc(:calcs)
