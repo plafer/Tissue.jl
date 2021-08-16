@@ -35,17 +35,42 @@ function set_next_timestamp(graph::Graph, next_ts)
     graph.next_timestamp = next_ts
 end
 
+function get_sinks_lock(graph::Graph)
+    graph.sinks_lock
+end
+
+function is_last_sink_not_init(graph::Graph)
+    is_last = nothing
+    lk = get_sinks_lock(graph)
+
+    lock(lk)
+    # TODO: Use getter
+    graph.num_sinks_not_init -= 1
+    if graph.num_sinks_not_init == 0
+        is_last = true 
+    else
+        is_last = false
+    end
+    unlock(lk)
+
+    return is_last
+end
+
+function get_num_sinks_not_init(graph::Graph)
+    graph.num_sinks_not_init
+end
+
+# TODO :REMOVE
 function inc_num_virgin_output_streams(graph::Graph)
     graph.num_virgin_output_streams[] += 1
 end
 
+# TODO :REMOVE
 function dec_num_virgin_output_streams(graph::Graph)
     graph.num_virgin_output_streams[] -= 1
 end
 
-"""
-A virgin output stream is one which has not received a packet yet.
-"""
+# TODO :REMOVE
 function get_num_virgin_output_streams(graph::Graph)
     graph.num_virgin_output_streams[]
 end
@@ -99,6 +124,7 @@ function wait_until_done(graph::Graph)
     close(get_generator_calculator(graph))
 end
 
+# TODO :REMOVE
 """
 Register a callback to a graph output stream.
 

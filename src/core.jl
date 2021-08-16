@@ -48,19 +48,22 @@ struct CalculatorWrapper
     """
     output_channels::Vector{Channel}
 
+    "Whether the wrapped calculator is a sink calculator"
+    is_sink::Bool
+
     """
     Statistic about the (exponentially smoothed) execution time of the calculator's
     `process()`.
     """
     exec_time::Threads.Atomic{Float64}
 
-    CalculatorWrapper(calc, input_channels, output_channels) =
-        new(calc, input_channels, output_channels, Threads.Atomic{Float64}(-1.0))
+    CalculatorWrapper(calc, input_channels, output_channels, is_sink) =
+        new(calc, input_channels, output_channels, is_sink, Threads.Atomic{Float64}(-1.0))
 end
 
 get_calculator(cw::CalculatorWrapper) = cw.calculator
 get_output_channels(cw::CalculatorWrapper)::Vector{Channel} = cw.output_channels
-
+is_sink(cw::CalculatorWrapper) = cw.is_sink
 get_exec_time(cw::CalculatorWrapper) = cw.exec_time[]
 
 function add_new_exec_time(cw::CalculatorWrapper, new_time::Float64)
@@ -111,6 +114,15 @@ function run_calculator(graph::Graph, cw::CalculatorWrapper)
     while !done
         in_packets::Vector{Packet} = fetch_input_streams(cw)
 
+        if is_sink(cw) && is_last_sink_not_init(graph)
+            # Generator period bootstrap just ended
+            lk = get_flow_limiter_bootstrap_lock(graph)
+
+            lock(lk)
+            notify(get_flow_limiter_bootstrap_cond(graph))
+            unlock(lk)
+        end
+
         if all(is_done_packet, in_packets)
             # Note: calculators will be `close()`d in the main thread
             done_packet = in_packets[1]
@@ -126,8 +138,9 @@ function run_calculator(graph::Graph, cw::CalculatorWrapper)
                 add_new_exec_time(cw, stats.time)
                 out_value = stats.value
             catch e
-                println("Error caught in process():$e :")
+                println("Error caught: $e :")
                 display(stacktrace(catch_backtrace()))
+                println()
                 stop(graph)
                 done = true
             end
@@ -201,7 +214,7 @@ function start(graph::Graph)
 
         lock(lk)
         try
-            while get_num_virgin_output_streams(graph) > 0
+            while get_num_sinks_not_init(graph) > 0
                 wait(cond)
             end
         finally

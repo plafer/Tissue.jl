@@ -34,6 +34,7 @@
 + Bootstrap: the initial flow estimate is very much an underestimate, and the graph takes a few seconds to get to its limiting fps.
 + BUG: If a packet is dropped on the first run of a graph, the graph just hangs.
     + Take into consideration when redesigning the bootstrap
++ Tasks spawned within calculators are not waited for when graph is stopped
 # Performance improvements
 + Don't use structs that have fields with abstract types, see [this](https://docs.julialang.org/en/v1/manual/performance-tips/#Avoid-fields-with-abstract-type)
     + e.g. Frame
@@ -62,6 +63,7 @@
     + Find a better abstraction.
 + Debug mechanism for when your graph just hangs
     + Perhaps a trace of which `process()` gets called and what not so you can see right away which part is hanging.
++ A subgraph construct, which allows a user to define a subgraph that can be used as one calculator in graphs.
 
 # Fundamental issues to de-risk
 + Multi-threading can [break finalizers](https://docs.julialang.org/en/v1/manual/multi-threading/#Safe-use-of-Finalizers)
@@ -78,7 +80,9 @@
     + Currently the flow limiter doesn't apply to registered callbacks, so the flow limiter doesn't see callbacks.
         + If a callback is slow, packets will accumulate.
     + But maybe we don't want the callback stuff to be accounted for in the flow limiter? Somehow if we'd want to e.g. show an image right until the next shows up? But that's what we do now and the task is not blocked... Anyhow, I think it should be accounted for.
-
++ What's the best way to handle network calls? Should you block within a calculator, or spawn a task, unaccounted for by the graph's flow limiter?
+    + If we don't need the response to move further, then `@spawn`ing a task is fine.
+        + But we'll probably need the closed loop control on the flow limiter so that if these tasks end up taking up too much CPU time, we'll lower the fps.
 # Crazy ideas or are they
 + Build a GUI that lets you generate the scaffolding for a given graph structure
 + Build a tracer that lets you visualize packets traveling through the graph, and a timeline similar to MediaPipe
@@ -164,3 +168,39 @@ Send the first packet in. After it arrived at all output streams, run the first 
         + after packet reaches all outputs if bootstrapping
 3. Flow limiter period evaluation
     + determine and set the new generator period
+
+## Generator calculator, input and output streams redesign
++ Packet generation
+    + Defined implicitly: only one calculator can/must be input-less.
+    + Treated differently internally: compute the time for process, but subtract that from the offset
+        + so that if it takes 1ms to read from camera, start 1ms before the graph can start handling it.
+    + Then, `@inputstream` goes away entirely.
++ Packet consumption: output stream
+    + goes away entirely as well
+    + A graph then encompasses how the output is consumed
+    + What if you want to simply change how the output is consumed?
+        + I think subgraphs will be the way to do it.
+        + Wouldn't it better though if I could just plug in someone else's graph, because it outputs
+        useful information? So graphs don't even need to be designed to be reusable.
+            + well partially true. I can write my graph so that it doesn't use output streams. So
+            it must be designed anyways.
+            + so if someone thinks a graph can be reused, they should write it as a subgraph.
++ Bootstrapping will also need to change, as we no longer have output streams.
+    + just by looking at your `CalculatorWrapper`'s output streams, you can know which is a "terminal calculator".
+    + How to avoid the `return nothing` bootstrap bug?
+        + Bootstrapping assumption: all terminal calculators receive a packet on the first run.
+        + Solution: if 
+            1. a packet calculator returns nothing, 
+            2. we didn't bootstrap yet, 
+            3. no task with the current frame notified the bootstrapping task
+        then
+            1. record that the current frame notified the bootstrapping task
+            2. notify the bootstrapping task (so that it can send a new packet)
+
++ Output stream
+    + Data structures
+        + CW: add a flag :is_sink.
+        + graph: add an Int field :sinks_not_init
+    + In constructor, while looping constructing all CWs, if `output_channels` is empty, then set the `:is_sink` flag to true, and increment sink counter
+        + Construct the graph with sink counter
+    + In `run_calculator`, after `fetch_input_streams`, if CW.is_sink, then decrement the graph's `sink_not_init` count. If count == 0, signal condition var.

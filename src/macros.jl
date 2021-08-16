@@ -52,7 +52,8 @@ function _graph(graph_name, init_block)
             next_timestamp::Int64
             done::Threads.Atomic{Bool}
             gen_period::Threads.Atomic{Float64}
-            num_virgin_output_streams::Threads.Atomic{Int64}
+            sinks_lock::Base.ReentrantLock
+            num_sinks_not_init::Int64
             bootstrap_lock::Base.ReentrantLock
             bootstrap_cond::Threads.Condition
 
@@ -79,6 +80,7 @@ function _graph(graph_name, init_block)
                 end
 
                 calculator_wrappers = []
+                num_sinks_not_init = 0
                 for pair = $calcs_var
                     calc_sym, (input_channels_dict, output_channels, calc) = pair
                     
@@ -88,10 +90,17 @@ function _graph(graph_name, init_block)
                         # TODO: switch back to @error
                         println("Couldn't find process()")
                     end
+                    
+                    is_sink_calculator = false
+                    if isempty(output_channels)
+                        is_sink_calculator = true
+                        num_sinks_not_init += 1
+                    end
 
-                    cw = CalculatorWrapper(calc, input_channels, output_channels)
+                    cw = CalculatorWrapper(calc, input_channels, output_channels, is_sink_calculator)
                     push!(calculator_wrappers, cw)
                 end
+
                 
                 lk = Base.ReentrantLock()
                 new(
@@ -103,7 +112,8 @@ function _graph(graph_name, init_block)
                     0,
                     Threads.Atomic{Bool}(false),
                     Threads.Atomic{Float64}(0.0),
-                    Threads.Atomic{Int64}(0),
+                    Base.ReentrantLock(),
+                    num_sinks_not_init,
                     lk,
                     Threads.Condition(lk),
                 )
