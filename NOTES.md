@@ -56,6 +56,7 @@
 + Flow limiter: Have a `desired_rate` parameter, which we don't surpass.
 + Flow limiter: if a `process()` ran way slower all of a sudden for a couple of shots,
     maybe send a message so that the generator rate is reevaluated.
++ Flow limiter: generator calculator execution time should be subtracted from fps
 + Some nice error messages and reference number (e.g. E1032), similar to what Rust does
 + Generator calculator and @definputstream is ugly. The generator calculator is not
     a calculator, because we don't want to collect run time stats on it, so we need
