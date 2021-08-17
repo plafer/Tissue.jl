@@ -4,7 +4,7 @@ import Base.Threads: @spawn, @threads, threadid
 using MLStyle
 
 export Graph, CalculatorBase, get_data, register_callback, start, stop, wait_until_done
-export @graph, @calculator, @defstreams
+export @graph, @calculator, @bindstreams
 
 
 """

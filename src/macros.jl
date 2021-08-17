@@ -155,56 +155,30 @@ macro calculator(assign_expr)
     return _calculator(assign_expr)
 end
 
-"""
-Captures the pattern `calc->stream` into a tuple (calc, stream)
-"""
-function _capture_calculator_stream(ex)
-    # FIXME: What if we need the LineNodes somewhere?
-    @match Base.remove_linenums!(ex) begin
-        Expr(:->, calc, Expr(:block, stream)) => (calc, stream)
+function _capture_bindings(bindings)
+    @match bindings begin
+        [Expr(:(=), stream, var)] => ((stream, var),)
+        [Expr(:(=), stream, var), rest...] => ((stream, var), _capture_bindings(rest)...)
     end
 end
 
-# Captures the pattern `c1 => c2->in` into a tuple `(c1, (c2, in))`.
-function _capture_big_arrow(ex)
-    @match ex begin
-        Expr(:call, :(=>), outcalc, stream_arrow_ex) =>
-            (outcalc, _capture_calculator_stream(stream_arrow_ex))
-    end
-end
+macro bindstreams(input_calculator, binding_exprs...)
+    bindings = _capture_bindings([b for b in binding_exprs])
 
-# [c3->in, c4->in, ...] => ((c3,in), (c4, in), ...)
-function _match_elements(ex)
-    @match ex begin
-        [] => ()
-        [first, rest...] => (_capture_calculator_stream(first), _match_elements(rest)...)
-    end
-end
-
-function _defstreams(ex)
-    # e.g. For input: c1 => c2->in_stream, c3->other_in_stream
-    # streams == (:c1, (:c2, :in_stream), (:c3, :other_in_stream))
-    streams = @match ex begin
-        Expr(:tuple, big_arrow_ex, other_streams...) =>
-            (_capture_big_arrow(big_arrow_ex)..., _match_elements(other_streams)...)
-        ex => _capture_big_arrow(ex)
-    end
-
-    source_calc = QuoteNode(streams[1])
     calcs_var = esc(:calcs)
 
+    #@bindstreams renderer in_frame=generator
+    # renderer: input channel `in_frame` get populated
+    # generator: output channel gets populated
+    # calcs[calc_sym]: (input_channels, output_channels, calc)
     return quote
-        for (calc, in_stream) in $streams[2:end]
+        for (in_stream, output_calculator) in $bindings
             channel = Channel(32)
             # Add to output channel
-            push!($calcs_var[$source_calc][2], channel)
+            push!($calcs_var[output_calculator][2], channel)
 
             # Add to input channel
-            $calcs_var[calc][1][in_stream] = channel
+            $calcs_var[$(QuoteNode(input_calculator))][1][in_stream] = channel
         end
     end
-end
-
-macro defstreams(ex)
-    return _defstreams(ex)
 end
