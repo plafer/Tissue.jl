@@ -37,24 +37,24 @@ function process(c::MultiplyCalculator, first_num::Int, second_num::Int)::Int
     return first_num * second_num
 end
 
-@graph NumberGraph begin
-    # 1. Declare generator calculator
-    @generatorcalculator g = GeneratorCalculator()
+struct PrinterCalculator <: CalculatorBase end
 
-    # 2. Declare calculators
+function process(c::PrinterCalculator, num_to_print)
+    println(num_to_print)
+end
+
+@graph NumberGraph begin
+    # 1. Declare calculators.
+    @calculator generator = GeneratorCalculator()
     @calculator add0 = AddConstantCalculator(0)
     @calculator add42 = AddConstantCalculator(42)
     @calculator mult = MultiplyCalculator()
+    @calculator printer = PrinterCalculator()
 
-    # 3. Declare the streams that connect to the generator
-    @definputstream add0->num_in
-    @definputstream add42->num_in
-
-    # 4. Declare streams that connect calculators together
-    @defstreams add0 => mult->first_num
-    @defstreams add42 => mult->second_num
-
-    # 5. Declare the graph's output stream called "out", corresponding to `mult`'s output
-    @defoutputstream :out mult
+    # 2. Declare the streams which connect the calculators together
+    @bindstreams add0 num_in=generator
+    @bindstreams add42 num_in = generator
+    @bindstreams mult first_num=add0 second_num=add42
+    @bindstreams printer num_to_print=mult
 end
 ```
