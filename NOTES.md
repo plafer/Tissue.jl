@@ -21,16 +21,10 @@
 + Some code needs to be run in the main thread (e.g. all UI operations in QT).
     + we need a mechanism to specify whether callbacks need to be run in UI thread
     or not.
-+ If no callbacks are registered for a graph output stream, don't write to that channel
-+ in `wait_until_done()`, also wait for all callback tasks to be done.
 + Add closed loop control in determining the sleep period for polling the generator
     calculator.
     + Technically, we could be polling too fast and filling up the `Channel` buffers.
 + Flow limiter: the initial bootstrap takes into account the compilation time.
-+ The current setup requires an output stream for a graph to be defined.
-    + What if I want to consume the output all within calculators (e.g. display it and that's it)?
-    + We could patch it up simply by putting a sink to any output stream which has no callback registered.
-    + Or maybe we'd want to do all the work within graphs, and have no output streams?
 + Bootstrap: the initial flow estimate is very much an underestimate, and the graph takes a few seconds to get to its limiting fps.
 + BUG: If a packet is dropped on the first run of a graph, the graph just hangs.
     + Take into consideration when redesigning the bootstrap
@@ -58,40 +52,13 @@
     maybe send a message so that the generator rate is reevaluated.
 + Flow limiter: generator calculator execution time should be subtracted from fps
 + Some nice error messages and reference number (e.g. E1032), similar to what Rust does
-+ Generator calculator and @definputstream is ugly. The generator calculator is not
-    a calculator, because we don't want to collect run time stats on it, so we need
-    a separate code path
-    + Find a better abstraction.
 + Debug mechanism for when your graph just hangs
     + Perhaps a trace of which `process()` gets called and what not so you can see right away which part is hanging.
 + A subgraph construct, which allows a user to define a subgraph that can be used as one calculator in graphs.
 
-# Fundamental issues to de-risk
-+ Multi-threading can [break finalizers](https://docs.julialang.org/en/v1/manual/multi-threading/#Safe-use-of-Finalizers)
-    + libraries that we'll use, e.g. OpenCV wrapper or CUDA.jl, will probably use
-    finalizers.
-    + Can we not use threads then? Or some other lock wizardry of some sort?
-    + UPDATE: in State of Julia 2021, they say finalizers will be ran in a dedicated
-    thread. 
-        + Feature is coming.
-
-# Questions
-+ Do we want all computation to be done in a calculator?
-    + As opposed to registering a callback to output stream
-    + Currently the flow limiter doesn't apply to registered callbacks, so the flow limiter doesn't see callbacks.
-        + If a callback is slow, packets will accumulate.
-    + But maybe we don't want the callback stuff to be accounted for in the flow limiter? Somehow if we'd want to e.g. show an image right until the next shows up? But that's what we do now and the task is not blocked... Anyhow, I think it should be accounted for.
-+ What's the best way to handle network calls? Should you block within a calculator, or spawn a task, unaccounted for by the graph's flow limiter?
-    + If we don't need the response to move further, then `@spawn`ing a task is fine.
-        + But we'll probably need the closed loop control on the flow limiter so that if these tasks end up taking up too much CPU time, we'll lower the fps.
 # Crazy ideas or are they
 + Build a GUI that lets you generate the scaffolding for a given graph structure
 + Build a tracer that lets you visualize packets traveling through the graph, and a timeline similar to MediaPipe
-+ New macro to define streams: `@bindstreams`.
-    + The current syntax is "output stream" based. A better syntax perhaps would focus on the input streams.
-    + e.g. `@bindstreams renderer in_frame:g confidence_boxes:face_detector`
-        + It's way easier to spot bugs in the graph structure, and to see in one glance which `process()` will be resolved.
-
 # Decisions
 + About the immutability of packets
     + We will *encourage* users to never mutate data that comes from streams.
