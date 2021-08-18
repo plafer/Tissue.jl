@@ -8,10 +8,6 @@ function get_generator_calculator_wrapper(graph::Graph)::CalculatorWrapper
     graph.generator_calculator
 end
 
-function get_output_channel(graph::Graph, channel_name::Symbol)::Channel
-    graph.named_output_channels[channel_name]
-end
-
 function get_calculator_wrappers(graph::Graph)
     graph.calculator_wrappers
 end
