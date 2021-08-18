@@ -26,7 +26,7 @@ struct AddConstantCalculator <: CalculatorBase
     constant::Int
 end
 
-function T.process(c::AddConstantCalculator, num_in::Int)::Int
+function T.process(c::AddConstantCalculator, num_in::Int; graph::Graph)::Int
     return num_in + c.constant
 end
 
@@ -88,7 +88,7 @@ expected_values = Dict(
         :len_input_ch => 1,
         :len_output_ch => 1,
         :is_sink => false,
-        :has_graph_kw => false,
+        :has_graph_kw => true,
     ),
     SubtractConstantCalculator => Dict(
         :len_input_ch => 1,
