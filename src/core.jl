@@ -71,6 +71,7 @@ struct CalculatorWrapper
 end
 
 get_calculator(cw::CalculatorWrapper) = cw.calculator
+get_input_channels(cw::CalculatorWrapper)::Vector{Channel} = cw.input_channels
 get_output_channels(cw::CalculatorWrapper)::Vector{Channel} = cw.output_channels
 is_sink(cw::CalculatorWrapper) = cw.is_sink
 process_has_graph_kw(cw::CalculatorWrapper) = cw.process_has_graph_kw

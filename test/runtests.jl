@@ -1,6 +1,3 @@
-using Tissue
-using Test
+using SafeTestsets
 
-@testset "Tissue.jl" begin
-    # Write your tests here.
-end
+@safetestset "Graph topology" begin include("graph.jl") end
