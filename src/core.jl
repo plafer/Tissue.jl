@@ -125,15 +125,6 @@ function run_calculator(graph::Graph, cw::CalculatorWrapper)
     while !done
         in_packets::Vector{Packet} = fetch_input_streams(cw)
 
-        if is_sink(cw) && is_last_sink_not_init(graph)
-            # Generator period bootstrap just ended
-            lk = get_flow_limiter_bootstrap_lock(graph)
-
-            lock(lk)
-            notify(get_flow_limiter_bootstrap_cond(graph))
-            unlock(lk)
-        end
-
         if all(is_done_packet, in_packets)
             # Note: calculators will be `close()`d in the main thread
             done_packet = in_packets[1]
@@ -147,7 +138,11 @@ function run_calculator(graph::Graph, cw::CalculatorWrapper)
             try
                 stats = nothing
                 if process_has_graph_kw(cw)
-                    stats = @timed process(get_calculator(cw), map(get_data, in_packets)..., graph = graph)
+                    stats = @timed process(
+                        get_calculator(cw),
+                        map(get_data, in_packets)...,
+                        graph = graph,
+                    )
                 else
                     stats = @timed process(get_calculator(cw), map(get_data, in_packets)...)
                 end
@@ -170,6 +165,16 @@ function run_calculator(graph::Graph, cw::CalculatorWrapper)
                 end
             end
         end
+
+        if is_sink(cw) && is_last_sink_not_init(graph)
+            # Generator period bootstrap just ended
+            lk = get_flow_limiter_bootstrap_lock(graph)
+
+            lock(lk)
+            notify(get_flow_limiter_bootstrap_cond(graph))
+            unlock(lk)
+        end
+
     end
 end
 
@@ -177,7 +182,12 @@ end
 Evaluates the flow limiter period (i.e. the amount of time to sleep in between fetching new packets from the generator calculator)
 """
 function evaluate_packet_period(graph)
-    exec_times = map(get_exec_time, get_calculator_wrappers(graph))
+    non_gen_cws = filter(
+        cw -> cw != get_generator_calculator_wrapper(graph),
+        get_calculator_wrappers(graph),
+    )
+
+    exec_times = map(get_exec_time, non_gen_cws)
     if all(time -> time > 0.0, exec_times)
         new_gen_period = max(exec_times...)
         set_generator_period(graph, new_gen_period)
@@ -211,17 +221,15 @@ end
 function start(graph::Graph)
     # TODO: If already started, error
 
-    # Start calculators
+    # Start all non-generator calculators
     for calculator_wrapper in get_calculator_wrappers(graph)
         if calculator_wrapper != get_generator_calculator_wrapper(graph)
-            t = @spawn begin
-                run_calculator(graph, calculator_wrapper)
-            end
+            t = @spawn run_calculator(graph, calculator_wrapper)
             push!(get_cw_tasks(graph), t)
         end
     end
 
-    # Generate the first packet 
+    # Generate the first packet
     success = generate_packet_and_write(graph)
     if !success
         return
@@ -258,9 +266,10 @@ function start(graph::Graph)
 
         # Start flow limiter period evaluation
         @spawn begin
+            sleep(GENERATOR_PERIOD_REEVAL_PERIOD)
             while !is_done(graph)
-                sleep(GENERATOR_PERIOD_REEVAL_PERIOD)
                 evaluate_packet_period(graph)
+                sleep(GENERATOR_PERIOD_REEVAL_PERIOD)
             end
         end
     end

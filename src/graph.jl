@@ -50,7 +50,12 @@ function is_last_sink_not_init(graph::Graph)
 end
 
 function get_num_sinks_not_init(graph::Graph)
-    graph.num_sinks_not_init
+    lk = get_sinks_lock(graph)
+    lock(lk)
+    ret = graph.num_sinks_not_init
+    unlock(lk)
+
+    ret
 end
 
 function get_flow_limiter_bootstrap_lock(graph::Graph)

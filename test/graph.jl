@@ -63,7 +63,7 @@ end
     # 2. Declare the streams which connect the calculators together
     @bindstreams add1 num_in = generator
     @bindstreams sub2 num_in = generator
-    @bindstreams mult first_num=add1 second_num=sub2
+    @bindstreams mult (first_num = add1) (second_num = sub2)
     @bindstreams printer num_to_print=mult
 end
 
