@@ -3,20 +3,15 @@ module Tissue
 import Base.Threads: @spawn, @threads, threadid
 using MLStyle
 
-export Graph, CalculatorBase, get_data, register_callback, start, stop, wait_until_done
+export Graph, get_data, start, stop, wait_until_done
 export @graph, @calculator, @bindstreams
 
 
-"""
-The parent type of all calculators.
-"""
-abstract type CalculatorBase end
-
-function process(calc::CalculatorBase)
+function process()
     throw("Called unimplemented process(). This shouldn't happen.")
 end
 
-function close(calc::CalculatorBase)
+function close(calc)
     # nothing
 end
 

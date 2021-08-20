@@ -6,7 +6,7 @@ const MAX_GEN = 3
 
 accumulator = Threads.Atomic{Int}(0)
 
-mutable struct GeneratorCalculator <: CalculatorBase 
+mutable struct GeneratorCalculator 
     last::Int
     GeneratorCalculator() = new(1)
 end
@@ -22,7 +22,7 @@ function T.process(c::GeneratorCalculator)
     return ret_val
 end
 
-struct AddConstantCalculator <: CalculatorBase
+struct AddConstantCalculator
     constant::Int
 end
 
@@ -30,7 +30,7 @@ function T.process(c::AddConstantCalculator, num_in::Int; graph::Graph)::Int
     return num_in + c.constant
 end
 
-struct SubtractConstantCalculator <: CalculatorBase
+struct SubtractConstantCalculator
     constant::Int
 end
 
@@ -38,13 +38,13 @@ function T.process(c::SubtractConstantCalculator, num_in::Int)::Int
     return num_in - c.constant
 end
 
-struct MultiplyCalculator <: CalculatorBase end
+struct MultiplyCalculator end
 
 function T.process(c::MultiplyCalculator, first_num::Int, second_num::Int)::Int
     return first_num * second_num
 end
 
-mutable struct PrinterCalculator <: CalculatorBase end
+mutable struct PrinterCalculator end
 
 function T.process(c::PrinterCalculator, num_to_print)
     accumulator[] += num_to_print

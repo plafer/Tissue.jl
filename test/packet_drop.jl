@@ -3,7 +3,7 @@ import Tissue as T
 
 packets_received_receiver = Vector{Int}()
 packets_received_barrier = Vector{Int}()
-mutable struct GeneratorCalculator <: CalculatorBase 
+mutable struct GeneratorCalculator 
     last::Int
     max_gen::Int
     GeneratorCalculator() = new(1, 5)
@@ -20,7 +20,7 @@ function T.process(c::GeneratorCalculator)
     return ret_val
 end
 
-mutable struct InterleaverCalculator <: CalculatorBase
+mutable struct InterleaverCalculator
     keep_freq::Int64
     count::Int64
     function InterleaverCalculator(keep_freq)
@@ -39,19 +39,19 @@ function T.process(calc::InterleaverCalculator, in_num::Int)
     return in_num
 end
 
-struct ReceiverCalculator <: CalculatorBase end
+struct ReceiverCalculator end
 
 function T.process(calc::ReceiverCalculator, in_num::Int)
     push!(packets_received_receiver, in_num)
 end
 
-struct BarrierCalculator <: CalculatorBase end
+struct BarrierCalculator end
 
 function T.process(calc::BarrierCalculator, in1::Int, in2::Int)
     push!(packets_received_barrier, in1 + in2)
 end
 
-struct PassthroughCalculator <: CalculatorBase end
+struct PassthroughCalculator end
 
 function T.process(calc::PassthroughCalculator, in_num::Int)
     in_num

@@ -5,7 +5,7 @@ const NUM_ITERATIONS = 5
 const TARGET_PERIOD = 0.5
 
 
-mutable struct TimestampGeneratorCalculator <: CalculatorBase 
+mutable struct TimestampGeneratorCalculator 
     last::Int
     max_gen::Int
     TimestampGeneratorCalculator() = new(1, NUM_ITERATIONS)
@@ -21,7 +21,7 @@ function T.process(c::TimestampGeneratorCalculator)
     return time()
 end
 
-mutable struct PeriodCalculator <: CalculatorBase 
+mutable struct PeriodCalculator 
     last_ts::Float64
 
     PeriodCalculator() = new(-1)
@@ -41,7 +41,7 @@ function T.process(calc::PeriodCalculator, new_ts::Float64)
     new_ts
 end
 
-struct SleeperCalculator <: CalculatorBase
+struct SleeperCalculator
     "Sleep time in seconds"
     sleep_time::Float64
 end

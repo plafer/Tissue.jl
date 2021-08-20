@@ -3,7 +3,7 @@
 using Tissue
 import Tissue as T
 
-mutable struct TheCalculator <: CalculatorBase 
+mutable struct TheCalculator 
     done::Bool
     TheCalculator() = new(false)
 end

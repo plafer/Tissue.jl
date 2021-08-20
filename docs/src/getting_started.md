@@ -11,13 +11,13 @@ We will build a graph with the following topology.
 
 The corresponding code to build that graph would be:
 ```julia
-struct GeneratorCalculator <: CalculatorBase end
+struct GeneratorCalculator end
 
 function process(c::GeneratorCalculator)
     return 42
 end
 
-struct AddConstantCalculator <: CalculatorBase
+struct AddConstantCalculator
     constant::Int
 end
 
@@ -25,13 +25,13 @@ function process(c::AddConstantCalculator, num_in::Int)::Int
     return num_in + c.constant
 end
 
-struct MultiplyCalculator <: CalculatorBase end
+struct MultiplyCalculator end
 
 function process(c::MultiplyCalculator, first_num::Int, second_num::Int)::Int
     return first_num * second_num
 end
 
-struct PrinterCalculator <: CalculatorBase end
+struct PrinterCalculator end
 
 function process(c::PrinterCalculator, num_to_print)
     println(num_to_print)

@@ -34,7 +34,7 @@ get_data(p::Packet) = p.data
 is_done_packet(p::Packet) = p.done
 
 struct CalculatorWrapper
-    calculator::CalculatorBase
+    calculator::Any
     """
     All Channels which connect the wrapped calculator with the rest of the graph.
 
