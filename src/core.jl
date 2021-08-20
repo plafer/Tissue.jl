@@ -1,8 +1,8 @@
 """
-Period at which we should reevaluate the generator period (seconds)
+Period at which we should reevaluate the source period (seconds)
 """
-const GENERATOR_PERIOD_REEVAL_PERIOD = 1
-const GENERATOR_PERIOD_REEVAL_ALPHA = 0.1
+const SOURCE_PERIOD_REEVAL_PERIOD = 1
+const SOURCE_PERIOD_REEVAL_ALPHA = 0.1
 
 struct Frame
     data::Any
@@ -81,8 +81,8 @@ function add_new_exec_time(cw::CalculatorWrapper, new_time::Float64)
     current_time = get_exec_time(cw)
     if current_time > 0.0
         cw.exec_time[] =
-            GENERATOR_PERIOD_REEVAL_ALPHA * current_time +
-            (1 - GENERATOR_PERIOD_REEVAL_ALPHA) * new_time
+            SOURCE_PERIOD_REEVAL_ALPHA * current_time +
+            (1 - SOURCE_PERIOD_REEVAL_ALPHA) * new_time
     else
         cw.exec_time[] = new_time
     end
@@ -167,7 +167,7 @@ function run_calculator(graph::Graph, cw::CalculatorWrapper)
         end
 
         if is_sink(cw) && is_last_sink_not_init(graph)
-            # Generator period bootstrap just ended
+            # Source period bootstrap just ended
             lk = get_flow_limiter_bootstrap_lock(graph)
 
             lock(lk)
@@ -179,23 +179,23 @@ function run_calculator(graph::Graph, cw::CalculatorWrapper)
 end
 
 """
-Evaluates the flow limiter period (i.e. the amount of time to sleep in between fetching new packets from the generator calculator)
+Evaluates the flow limiter period (i.e. the amount of time to sleep in between fetching new packets from the source calculator)
 """
 function evaluate_packet_period(graph)
     non_gen_cws = filter(
-        cw -> cw != get_generator_calculator_wrapper(graph),
+        cw -> cw != get_source_calculator_wrapper(graph),
         get_calculator_wrappers(graph),
     )
 
     exec_times = map(get_exec_time, non_gen_cws)
     if all(time -> time > 0.0, exec_times)
         new_gen_period = max(exec_times...)
-        set_generator_period(graph, new_gen_period)
+        set_source_period(graph, new_gen_period)
     end
 end
 
 """
-Generates a packet using the generator calculator and writes it to the graph.
+Generates a packet using the source calculator and writes it to the graph.
 
 Returns true if generate and write were successful, false if not, in which case the graph is stopped.
 
@@ -203,10 +203,10 @@ Returns true if generate and write were successful, false if not, in which case 
 function generate_packet_and_write(graph::Graph)::Bool
     packet_data = nothing
     try
-        generator_cw = get_generator_calculator_wrapper(graph)
-        packet_data = process(get_calculator(generator_cw))
+        source_cw = get_source_calculator_wrapper(graph)
+        packet_data = process(get_calculator(source_cw))
     catch e
-        println("Error caught in generator's process():\n$e")
+        println("Error caught in source's process():\n$e")
     end
 
     if packet_data === nothing
@@ -221,9 +221,9 @@ end
 function start(graph::Graph)
     # TODO: If already started, error
 
-    # Start all non-generator calculators
+    # Start all non-source calculators
     for calculator_wrapper in get_calculator_wrappers(graph)
-        if calculator_wrapper != get_generator_calculator_wrapper(graph)
+        if calculator_wrapper != get_source_calculator_wrapper(graph)
             t = @spawn run_calculator(graph, calculator_wrapper)
             push!(get_cw_tasks(graph), t)
         end
@@ -251,11 +251,11 @@ function start(graph::Graph)
 
         evaluate_packet_period(graph)
 
-        # Start generator function
+        # Start source function
         @spawn begin
             while !is_done(graph)
                 if generate_packet_and_write(graph)
-                    sleep(get_generator_period(graph))
+                    sleep(get_source_period(graph))
                 else
                     break
                 end
@@ -266,10 +266,10 @@ function start(graph::Graph)
 
         # Start flow limiter period evaluation
         @spawn begin
-            sleep(GENERATOR_PERIOD_REEVAL_PERIOD)
+            sleep(SOURCE_PERIOD_REEVAL_PERIOD)
             while !is_done(graph)
                 evaluate_packet_period(graph)
-                sleep(GENERATOR_PERIOD_REEVAL_PERIOD)
+                sleep(SOURCE_PERIOD_REEVAL_PERIOD)
             end
         end
     end
@@ -295,7 +295,7 @@ function write(graph::Graph, data::Any)
     packet_frame = Frame(data, timestamp)
     packet = Packet(data, packet_frame)
 
-    for channel in get_output_channels(get_generator_calculator_wrapper(graph))
+    for channel in get_output_channels(get_source_calculator_wrapper(graph))
         put!(channel, packet)
     end
 end
@@ -308,7 +308,7 @@ function write_done(graph::Graph)
     packet_frame = Frame(nothing, timestamp)
     done_packet = Packet(packet_frame)
 
-    for channel in get_output_channels(get_generator_calculator_wrapper(graph))
+    for channel in get_output_channels(get_source_calculator_wrapper(graph))
         put!(channel, done_packet)
     end
 end

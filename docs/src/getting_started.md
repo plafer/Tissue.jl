@@ -1,7 +1,7 @@
 # Getting Started
 + With a guiding example, introduce all the key concepts
     + graph, calculators, streams
-    + generator calculator
+    + source calculator
     + flow limiter
     + sink
 
@@ -11,9 +11,9 @@ We will build a graph with the following topology.
 
 The corresponding code to build that graph would be:
 ```julia
-struct GeneratorCalculator end
+struct SourceCalculator end
 
-function process(c::GeneratorCalculator)
+function process(c::SourceCalculator)
     return 42
 end
 
@@ -39,15 +39,15 @@ end
 
 @graph NumberGraph begin
     # 1. Declare calculators.
-    @calculator generator = GeneratorCalculator()
+    @calculator source = SourceCalculator()
     @calculator add0 = AddConstantCalculator(0)
     @calculator add42 = AddConstantCalculator(42)
     @calculator mult = MultiplyCalculator()
     @calculator printer = PrinterCalculator()
 
     # 2. Declare the streams which connect the calculators together
-    @bindstreams add0 (num_in = generator)
-    @bindstreams add42 (num_in = generator)
+    @bindstreams add0 (num_in = source)
+    @bindstreams add42 (num_in = source)
     @bindstreams mult (first_num=add0) (second_num=add42)
     @bindstreams printer (num_to_print = mult)
 end

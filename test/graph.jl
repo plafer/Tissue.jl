@@ -6,12 +6,12 @@ const MAX_GEN = 3
 
 accumulator = Threads.Atomic{Int}(0)
 
-mutable struct GeneratorCalculator 
+mutable struct SourceCalculator 
     last::Int
-    GeneratorCalculator() = new(1)
+    SourceCalculator() = new(1)
 end
 
-function T.process(c::GeneratorCalculator)
+function T.process(c::SourceCalculator)
     if c.last > MAX_GEN
         return nothing
     end
@@ -54,15 +54,15 @@ end
 
 @graph NumberGraph begin
     # 1. Declare calculators.
-    @calculator generator = GeneratorCalculator()
+    @calculator source = SourceCalculator()
     @calculator add1 = AddConstantCalculator(1)
     @calculator sub2 = SubtractConstantCalculator(2)
     @calculator mult = MultiplyCalculator()
     @calculator printer = PrinterCalculator()
 
     # 2. Declare the streams which connect the calculators together
-    @bindstreams add1 num_in = generator
-    @bindstreams sub2 num_in = generator
+    @bindstreams add1 num_in = source
+    @bindstreams sub2 num_in = source
     @bindstreams mult (first_num = add1) (second_num = sub2)
     @bindstreams printer num_to_print=mult
 end
@@ -72,13 +72,13 @@ graph = NumberGraph()
 ###############################
 # Before the graph is started
 ###############################
-@test typeof(T.get_calculator(T.get_generator_calculator_wrapper(graph))) ==
-      GeneratorCalculator
+@test typeof(T.get_calculator(T.get_source_calculator_wrapper(graph))) ==
+      SourceCalculator
 
 @test length(T.get_calculator_wrappers(graph)) == 5
 
 expected_values = Dict(
-    GeneratorCalculator => Dict(
+    SourceCalculator => Dict(
         :len_input_ch => 0,
         :len_output_ch => 2,
         :is_sink => false,
@@ -129,7 +129,7 @@ end
 
 T.start(graph)
 
-# The GeneratorCalculator does not run in a cw_task
+# The SourceCalculator does not run in a cw_task
 @test length(T.get_cw_tasks(graph)) == 4
 
 T.wait_until_done(graph)

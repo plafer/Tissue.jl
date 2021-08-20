@@ -31,10 +31,10 @@ T.process(c::TheCalculator, two, three) = begin
 end
 
 @graph Graph1 begin
-     @calculator generator = TheCalculator()
+     @calculator source = TheCalculator()
      @calculator calc = TheCalculator()
 
-     @bindstreams calc (one = generator)
+     @bindstreams calc (one = source)
 end
 
 graph1 = Graph1()
@@ -44,10 +44,10 @@ wait_until_done(graph1)
 @test the_value == 1
 
 @graph Graph2 begin
-     @calculator generator = TheCalculator()
+     @calculator source = TheCalculator()
      @calculator calc = TheCalculator()
 
-     @bindstreams calc (two = generator) (three = generator)
+     @bindstreams calc (two = source) (three = source)
 end
 
 graph2 = Graph2()

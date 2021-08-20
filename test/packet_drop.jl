@@ -3,13 +3,13 @@ import Tissue as T
 
 packets_received_receiver = Vector{Int}()
 packets_received_barrier = Vector{Int}()
-mutable struct GeneratorCalculator 
+mutable struct SourceCalculator 
     last::Int
     max_gen::Int
-    GeneratorCalculator() = new(1, 5)
+    SourceCalculator() = new(1, 5)
 end
 
-function T.process(c::GeneratorCalculator)
+function T.process(c::SourceCalculator)
     if c.last > c.max_gen
         return nothing
     end
@@ -58,11 +58,11 @@ function T.process(calc::PassthroughCalculator, in_num::Int)
 end
 
 @graph DroppingGraph begin
-    @calculator generator = GeneratorCalculator()
+    @calculator source = SourceCalculator()
     @calculator interleaver = InterleaverCalculator(2)
     @calculator receiver = ReceiverCalculator()
 
-    @bindstreams interleaver in_num=generator
+    @bindstreams interleaver in_num=source
     @bindstreams receiver in_num=interleaver
 end
 
@@ -77,13 +77,13 @@ T.wait_until_done(graph)
 
 "This graph tests whether Tissue.jl will properly throw away packets at the barrier, given that interleaver drops every other packet, which passthrough forwards them all."
 @graph SynchronizationGraph begin
-    @calculator generator = GeneratorCalculator()
+    @calculator source = SourceCalculator()
     @calculator passthrough = PassthroughCalculator()
     @calculator interleaver = InterleaverCalculator(2)
     @calculator barrier = BarrierCalculator()
     
-    @bindstreams passthrough in_num=generator
-    @bindstreams interleaver in_num=generator
+    @bindstreams passthrough in_num=source
+    @bindstreams interleaver in_num=source
     @bindstreams barrier in1=passthrough in2=interleaver
 end
 

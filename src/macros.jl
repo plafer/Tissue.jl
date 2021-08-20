@@ -53,7 +53,7 @@ function _graph(graph_name, init_block)
     return quote
         mutable struct $GraphName <: Graph
             named_output_channels::Dict{Symbol,Any}
-            generator_calculator::CalculatorWrapper
+            source_calculator::CalculatorWrapper
             calculator_wrappers::Vector{CalculatorWrapper}
             cw_tasks::Vector{Task}
             next_timestamp::Int64
@@ -104,7 +104,7 @@ function _graph(graph_name, init_block)
 
                     if isempty(input_channels_dict)
                         if $gen_calc_var !== nothing
-                            @error("More than 1 generator calculators are defined. You must define one and only one.")
+                            @error("More than 1 source calculators are defined. You must define one and only one.")
                         end
                         $gen_calc_var = cw
                     end
@@ -112,7 +112,7 @@ function _graph(graph_name, init_block)
                 end
 
                 if $gen_calc_var === nothing
-                    @error("No generator calculator defined. You must specify one and only one.")
+                    @error("No source calculator defined. You must specify one and only one.")
                 end
 
                 lk = Base.ReentrantLock()
@@ -167,9 +167,9 @@ macro bindstreams(input_calculator, binding_exprs...)
 
     calcs_var = esc(:calcs)
 
-    #@bindstreams renderer in_frame=generator
+    #@bindstreams renderer in_frame=source
     # renderer: input channel `in_frame` get populated
-    # generator: output channel gets populated
+    # source: output channel gets populated
     # calcs[calc_sym]: (input_channels, output_channels, calc)
     return quote
         for (in_stream, output_calculator) in $bindings

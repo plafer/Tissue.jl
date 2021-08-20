@@ -5,13 +5,13 @@ const NUM_ITERATIONS = 5
 const TARGET_PERIOD = 0.5
 
 
-mutable struct TimestampGeneratorCalculator 
+mutable struct TimestampSourceCalculator 
     last::Int
     max_gen::Int
-    TimestampGeneratorCalculator() = new(1, NUM_ITERATIONS)
+    TimestampSourceCalculator() = new(1, NUM_ITERATIONS)
 end
 
-function T.process(c::TimestampGeneratorCalculator)
+function T.process(c::TimestampSourceCalculator)
     if c.last > c.max_gen
         return nothing
     end
@@ -53,12 +53,12 @@ function T.process(calc::SleeperCalculator, in_num)
 end
 
 @graph SleeperGraph begin
-    @calculator generator = TimestampGeneratorCalculator()
+    @calculator source = TimestampSourceCalculator()
     @calculator period = PeriodCalculator()
     @calculator sleeper = SleeperCalculator(TARGET_PERIOD)
 
-    @bindstreams period (new_ts = generator)
-    @bindstreams sleeper (in_num = generator)
+    @bindstreams period (new_ts = source)
+    @bindstreams sleeper (in_num = source)
 end
 
 graph = SleeperGraph()

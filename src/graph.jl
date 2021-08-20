@@ -3,9 +3,9 @@ The parent type of all graphs.
 """
 abstract type Graph end
 
-function get_generator_calculator_wrapper(graph::Graph)::CalculatorWrapper
+function get_source_calculator_wrapper(graph::Graph)::CalculatorWrapper
     # FIXME: Change name to wrapper
-    graph.generator_calculator
+    graph.source_calculator
 end
 
 function get_calculator_wrappers(graph::Graph)
@@ -79,14 +79,14 @@ function is_done(graph::Graph)
 end
 
 """
-Gets the period (in the sense of inverse frequency) at which the generator
+Gets the period (in the sense of inverse frequency) at which the source
 calculator should be called to generate new graph input stream packets.
 """
-function get_generator_period(graph::Graph)::Float64
+function get_source_period(graph::Graph)::Float64
     graph.gen_period[]
 end
 
-function set_generator_period(graph::Graph, period::Float64)
+function set_source_period(graph::Graph, period::Float64)
     MIN_SLEEPABLE_TIME = 0.001
     graph.gen_period[] = max(MIN_SLEEPABLE_TIME, period)
 end

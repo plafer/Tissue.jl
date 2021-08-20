@@ -21,7 +21,7 @@
 + Some code needs to be run in the main thread (e.g. all UI operations in QT).
     + we need a mechanism to specify whether callbacks need to be run in UI thread
     or not.
-+ Add closed loop control in determining the sleep period for polling the generator
++ Add closed loop control in determining the sleep period for polling the source
     calculator.
     + Technically, we could be polling too fast and filling up the `Channel` buffers.
 + Flow limiter: the initial bootstrap takes into account the compilation time.
@@ -29,6 +29,8 @@
 + BUG: If a packet is dropped on the first run of a graph, the graph just hangs.
     + Take into consideration when redesigning the bootstrap
 + Tasks spawned within calculators are not waited for when graph is stopped
++ BUG: A user cannot use the symbol `calcs` within the `@graph` definition
+    + Use gensym-like names instead
 # Performance improvements
 + Don't use structs that have fields with abstract types, see [this](https://docs.julialang.org/en/v1/manual/performance-tips/#Avoid-fields-with-abstract-type)
     + e.g. Frame
@@ -49,8 +51,8 @@
         produce an error report that can be filed (well simply stack trace maybe).
 + Flow limiter: Have a `desired_rate` parameter, which we don't surpass.
 + Flow limiter: if a `process()` ran way slower all of a sudden for a couple of shots,
-    maybe send a message so that the generator rate is reevaluated.
-+ Flow limiter: generator calculator execution time should be subtracted from fps
+    maybe send a message so that the source rate is reevaluated.
++ Flow limiter: source calculator execution time should be subtracted from fps
 + Some nice error messages and reference number (e.g. E1032), similar to what Rust does
 + Debug mechanism for when your graph just hangs
     + Perhaps a trace of which `process()` gets called and what not so you can see right away which part is hanging.
@@ -78,7 +80,7 @@
 + What if I want to stop the whole thing 
     + Should I be able to stop the graph from a `process()`?
         + Maybe...
-    + The generator function should also be able to release its resources
+    + The source function should also be able to release its resources
         + e.g. the opencv videocapture.
     + Note: Exiting main thread will stop everything. Probably want to exit
         gracefully though
@@ -91,11 +93,11 @@
         + in `run_forever`,
             + loops over all  `start_calculator` tasks, calling `wait()` on all of them.
 
-# Generator Calculator
-+ The user *must* provide *one* "generator" calculator.
+# Source Calculator
++ The user *must* provide *one* "source" calculator.
 # Shutting down from `stop()`
 + The `stop()` function turns sets `graph.done = false`
-+ The generator task sees `done`, so sends a DONE packet through the graph. Exits.
++ The source task sees `done`, so sends a DONE packet through the graph. Exits.
 + `run_calculator` receives the DONE packet from `fetch_input_streams`.
     1. calls `close(calc)` on its calculator
     2. exits 
@@ -127,12 +129,12 @@ Send the first packet in. After it arrived at all output streams, run the first 
     + waits on `cond` until all packets have arrived at output streams
     + evaluate period
     + Launch flow limiter evaluation period task
-2. generator task
-    + Reads packet from generator calculator
+2. source task
+    + Reads packet from source calculator
         + Handles errors
     + Writes packet to graph
     + Hangs until it's time to read again
         + `period` if bootstrapped
         + after packet reaches all outputs if bootstrapping
 3. Flow limiter period evaluation
-    + determine and set the new generator period
+    + determine and set the new source period
