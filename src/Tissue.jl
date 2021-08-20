@@ -3,7 +3,7 @@ module Tissue
 import Base.Threads: @spawn, @threads, threadid
 using MLStyle
 
-export Graph, get_data, start, stop, wait_until_done
+export Graph, start, stop, wait_until_done
 export @graph, @calculator, @bindstreams
 
 
