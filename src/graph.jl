@@ -100,6 +100,7 @@ function wait_until_done(graph::Graph)
     set_cw_tasks(graph, Vector{Task}())
 
     # cleanup
+    # TODO: do this concurrently
     for calculator in map(get_calculator, get_calculator_wrappers(graph))
         close(calculator)
     end
