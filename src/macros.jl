@@ -134,6 +134,11 @@ function _graph(graph_name, init_block)
     end
 end
 
+"""
+    @graph GraphName begin ... end
+
+TODO
+"""
 macro graph(graph_name, init_block)
     return _graph(graph_name, init_block)
 end
@@ -151,6 +156,11 @@ function _calculator(assign_expr)
     end
 end
 
+"""
+    @calculator calculator_handle = CalculatorType(arg1, arg2)
+
+TODO
+"""
 macro calculator(assign_expr)
     return _calculator(assign_expr)
 end
@@ -162,6 +172,11 @@ function _capture_bindings(bindings)
     end
 end
 
+"""
+    @bindstreams calculator_handle (stream1 = calc1) (stream2 = calc2) ...
+
+TODO
+"""
 macro bindstreams(input_calculator, binding_exprs...)
     bindings = _capture_bindings([b for b in binding_exprs])
 

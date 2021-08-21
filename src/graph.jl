@@ -67,7 +67,9 @@ function get_flow_limiter_bootstrap_cond(graph::Graph)
 end
 
 """
-Gracefully stops the graph. `wait_until_done()` should be called to block the main
+    stop(graph)
+
+Gracefully stop the graph. `wait_until_done()` should be called to block the main
 thread until the graph is stopped.
 """
 function stop(graph::Graph)
@@ -91,6 +93,14 @@ function set_source_period(graph::Graph, period::Float64)
     graph.gen_period[] = max(MIN_SLEEPABLE_TIME, period)
 end
 
+"""
+    wait_until_done(graph)
+
+Block the main thread until the graph is done.
+
+Can only be called after [`start(graph)`](@ref) was called. This waits for all the calculators to be finished processing the last packet, and calls [`close(calculator)`](@ref) for each calculator. This can occur either because [`stop(graph)`](@ref) was called, or the source calculator indicated that it is done generating data by returning `nothing`.
+
+"""
 function wait_until_done(graph::Graph)
     # Wait on all tasks
     for calculator_wrapper_task in get_cw_tasks(graph)

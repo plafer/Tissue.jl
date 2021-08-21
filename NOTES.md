@@ -10,6 +10,9 @@
 + Make sure the implementation is free of data races.
     + Any data that is written by a thread and read by others should be protected
     by lock or atomic operation.
++ Make graph states explicit: READY, STARTED, STOPPING (which transitions back to READY)
+    + This can then be used to allow the user to properly start/stop the graph as many times as they want
+
 
 # Known issues
 + There is currently no way to dynamically change the parameters of the calculator in a graph (e.g. pass as command line argument)
@@ -138,3 +141,11 @@ Send the first packet in. After it arrived at all output streams, run the first 
         + after packet reaches all outputs if bootstrapping
 3. Flow limiter period evaluation
     + determine and set the new source period
+
+
+## Feature request: Make graph states explicit.
+
+1. when a graph is just created, its state is READY
+2. after `start()` is called, the graph moves in STARTED state
+3. when `stop()` is called, or the source returns `nothing`, the graph moves in STOPPING state, until `wait_until_done()` is called and returns, after which it goes back into READY state
+    + `wait_until_done()` also does cleanup, and *must* be called before starting the graph again. 

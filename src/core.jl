@@ -218,6 +218,11 @@ function generate_packet_and_write(graph::Graph)::Bool
     return true
 end
 
+"""
+    start(graph)
+
+Starts all the calculators and begins pulling data out of the source calculator.
+"""
 function start(graph::Graph)
     # TODO: If already started, error
 
