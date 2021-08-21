@@ -16,7 +16,7 @@ Here's what programming in Tissue.jl looks like.
 2. Define the graph topology
     + Using our graph definition [Domain Specific Language](https://en.wikipedia.org/wiki/Domain-specific_language) (DSL), define how the data flows from one calculator to the next.
 3. Run the graph
-    + Start the graph and let it do its thing. Tissue.jl will run all the calculators in parallel and pull data from the source calculator as fast as your graph can handle it.
+    + Start the graph and let it do its thing. Tissue.jl will run all the calculators concurrently and pull data from the source calculator as fast as your graph can handle it.
 
 When you write a calculator, you can specify the different set of streams it can accept, with a behavior corresponding to each set. Hence, calculators are reusable across different graph topologies. It's also easy to define new sets of streams a calculator can accept, lending on the power of multiple dispatch. It's therefore easy to adapt other people's calculators to fit nicely in your graph. Working in Tissue.jl also lends itself to working in teams. Different people work on different calculators, and you stitch the calculators together in one or more graphs at the end.
 

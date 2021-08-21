@@ -69,8 +69,24 @@ end
 """
     stop(graph)
 
-Gracefully stop the graph. `wait_until_done()` should be called to block the main
-thread until the graph is stopped.
+Stop the graph gracefully. 
+
+The graph will stop pulling new data packets out of the *source* calculator, and all the tasks running calculators will exit after they are done processing the last generated packet.
+
+[`Tissue.wait_until_done(graph)`](@ref) can be called in the main thread to block it until every calculator is fully terminated and closed.
+
+# Examples
+```julia
+using Tissue
+using MyGraphs: CoolestGraph
+
+graph = CoolestGraph()
+
+start(graph)
+sleep(5)
+stop(graph)
+wait_until_done(graph)
+```
 """
 function stop(graph::Graph)
     graph.done[] = true

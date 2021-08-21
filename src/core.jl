@@ -221,7 +221,9 @@ end
 """
     start(graph)
 
-Starts all the calculators and begins pulling data out of the source calculator.
+Start all the calculators and begin pulling data out of the source calculator.
+
+All calculators run in their own [task](https://docs.julialang.org/en/v1/base/parallel/#Tasks). A call to `start(graph)` does not block; it returns after spawning all the tasks.
 """
 function start(graph::Graph)
     # TODO: If already started, error

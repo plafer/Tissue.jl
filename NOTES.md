@@ -60,7 +60,12 @@
 + Debug mechanism for when your graph just hangs
     + Perhaps a trace of which `process()` gets called and what not so you can see right away which part is hanging.
 + A subgraph construct, which allows a user to define a subgraph that can be used as one calculator in graphs.
-
++ Make graph states explicit
+    1. when a graph is just created, its state is READY
+    2. after `start()` is called, the graph moves in STARTED state
+    3. when `stop()` is called, or the source returns `nothing`, the graph moves in STOPPING state, until `wait_until_done()` is called and returns, after which it goes back into READY state
+        + `wait_until_done()` also does cleanup, and *must* be called before starting the graph again. 
++ Bring back `open()`; this will be essential if people want to be able to start/stop their graph multiple times in the same program.
 # Crazy ideas or are they
 + Build a GUI that lets you generate the scaffolding for a given graph structure
 + Build a tracer that lets you visualize packets traveling through the graph, and a timeline similar to MediaPipe
@@ -141,11 +146,3 @@ Send the first packet in. After it arrived at all output streams, run the first 
         + after packet reaches all outputs if bootstrapping
 3. Flow limiter period evaluation
     + determine and set the new source period
-
-
-## Feature request: Make graph states explicit.
-
-1. when a graph is just created, its state is READY
-2. after `start()` is called, the graph moves in STARTED state
-3. when `stop()` is called, or the source returns `nothing`, the graph moves in STOPPING state, until `wait_until_done()` is called and returns, after which it goes back into READY state
-    + `wait_until_done()` also does cleanup, and *must* be called before starting the graph again. 

@@ -201,11 +201,147 @@ Finally, this blocks the main thread until the graph is done. In our case, this 
 That's all folks! Now, there's a thing or two we omitted in this example, so if you're hungry for more, follow me on to a more complicated example.
 
 ## A more complicated example
+Let's look at a more realistic example. We will write a graph which reads from the camera, runs a face detector on the image, and renders a box around the detected faces. At any time, the user can select the video feed window on their desktop and press any key to stop the graph. We will convert [this example from OpenCV](https://github.com/opencv/opencv_contrib/blob/master/modules/julia/samples/face_detect_dnn.jl) into a Tissue.jl graph.
 
-TODO: Show the use of `close()`, `stop()`, and the `;graph` kw argument to `process()`
+```julia
+using Tissue
+using OpenCV
+cv = OpenCV
+
+struct CameraCalculator
+    cap::cv.VideoCaptureAllocated
+
+    function CameraCalculator()
+        cap = cv.VideoCapture(Int32(0))
+        new(cap)
+    end
+end
+
+function Tissue.process(calc::CameraCalculator)
+    ok, img = cv.read(calc.cap)
+    ok ? img : nothing
+end
+
+function Tissue.close(calc::CameraCalculator)
+    cv.release(calc.cap)
+end
+
+struct FaceDetectionCalculator
+    net
+
+    function FaceDetectionCalculator()
+        net = cv.dnn_DetectionModel(
+            "assets/opencv_face_detector.pbtxt",
+            "assets/opencv_face_detector_uint8.pb",
+        )
+        size0 = Int32(300)
+        cv.dnn.setInputMean(net, (104, 177, 123))
+        cv.dnn.setInputScale(net, 1.0)
+        cv.dnn.setInputSize(net, size0, size0)
+
+        new(net)
+    end
+end
+
+function Tissue.process(calc::FaceDetectionCalculator, in_frame)
+    classIds, confidences, boxes =
+        cv.dnn.detect(calc.net, in_frame, confThreshold = Float32(0.5))
+
+    (confidences, boxes)
+end
+
+struct FaceRendererCalculator end
+
+function Tissue.process(calc::FaceRendererCalculator, in_frame, confidences_and_boxes)
+    confidences, boxes = confidences_and_boxes
+
+    out_frame = deepcopy(in_frame)
+
+    for i in 1:size(boxes,1)
+        confidence = confidences[i]
+        x0 = Int32(boxes[i].x)
+        y0 = Int32(boxes[i].y)
+        x1 = Int32(boxes[i].x+boxes[i].width)
+        y1 = Int32(boxes[i].y+boxes[i].height)
+        cv.rectangle(out_frame, cv.Point{Int32}(x0, y0), cv.Point{Int32}(x1, y1), (100, 255, 100); thickness = Int32(5))
+        label = "face: " * string(confidence)
+        lsize, bl = cv.getTextSize(label, cv.FONT_HERSHEY_SIMPLEX, 0.5, Int32(1))
+        cv.rectangle(out_frame, cv.Point{Int32}(x0,y0), cv.Point{Int32}(x0+lsize.width, y0+lsize.height+bl), (100,255,100); thickness = Int32(-1))
+        cv.putText(out_frame, label, cv.Point{Int32}(x0, y0 + lsize.height),
+        cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0); thickness = Int32(1), lineType = cv.LINE_AA)
+    end
+
+    out_frame
+end
+
+struct ImageDisplayCalculator end
+
+function Tissue.process(calc::ImageDisplayCalculator, rendered_frame; graph::Graph)
+    cv.imshow("detections", rendered_frame)
+
+    if cv.waitKey(Int32(1)) >= 0
+        stop(graph)
+    end
+end
+
+@graph FaceGraph begin
+    @calculator source = CameraCalculator()
+    @calculator face_detector = FaceDetectionCalculator()
+    @calculator renderer = FaceRendererCalculator()
+    @calculator displayer = ImageDisplayCalculator()
+
+    @bindstreams face_detector (in_frame = source)
+    @bindstreams renderer (in_frame = source) (confidences_and_boxes = face_detector)
+    @bindstreams displayer (rendered_frame = renderer)
+end
+
+function main()
+    graph = FaceGraph()
+    start(graph)
+    wait_until_done(graph)
+    println("Thanks for listening!")
+end
+
+main()
+```
+You can actually run this yourself! Just make sure you install the `OpenCV` package first (simply type `add OpenCV` on julia's `pkg` REPL).
+
+We will focus on the bits that were not covered in the [previous example](#A-simple-example).
+
+```julia
+function Tissue.close(calc::CameraCalculator)
+    cv.release(calc.cap)
+end
+```
+To clean up resources acquired in a calculator constructor when the graph stops, implement `Tissue.close(::CalculatorType)` with the corresponding calculator type. It will be called in [`wait_until_done(graph)`](@ref) after all the calculators are done running.
+
+```julia
+function Tissue.process(calc::FaceRendererCalculator, in_frame, confidences_and_boxes)
+    confidences, boxes = confidences_and_boxes
+
+    out_frame = deepcopy(in_frame)
+
+    for i in 1:size(boxes,1)
+        ...
+    end
+
+    out_frame
+end
+```
+The `process()` method for the `FaceRendererCalculator` highlights an important fact: data coming from the input streams could be accessed by multiple threads simultaneously since calculators run in their own [`task`](https://docs.julialang.org/en/v1/base/parallel/#Tasks). Therefore, we treat the data coming from input streams as immutable. Since we want to mutate it here, we first make a [`deepcopy`](https://docs.julialang.org/en/v1/base/base/#Base.deepcopy).
+
+```julia
+function Tissue.process(calc::ImageDisplayCalculator, rendered_frame; graph::Graph)
+    cv.imshow("detections", rendered_frame)
+
+    if cv.waitKey(Int32(1)) >= 0
+        stop(graph)
+    end
+end
+```
+Finally, the `process()` method for `ImageDisplayCalculator` introduces two new concepts. First, a reference to the current graph object can be obtained by adding a `graph` keyword argument to the `process()` method. In this case, we need it to call [`Tissue.stop(graph)`](@ref), the second new concept. [`Tissue.stop(graph)`](@ref) does as the name suggests: it stops the graph. This means a few things: the *source* calculator stops being called for new data packets, all packets that were generated are allowed to be processed by all calculators. After no more packets remain in the graph, if the main thread is blocked on a call to [`Tissue.wait_until_done(graph)`](@ref), [`Tissue.close(calculator)`](@ref) is called on every calculator. Although there is no race condition here: if the main thread calls [`Tissue.wait_until_done(graph)`](@ref) only after all calculators are done, [`Tissue.close(calculator)`](@ref) is also called on all calculators.
+
+And that's pretty much it! You should be good to go build awesome graphs now.
+
 TODO: You need to launch julia with as many threads as you want
-TODO: Talk about immutability
-TODO: talk about stream and sink
-TODO: Replace the talk of "in parallel" with "concurrently"
 TODO: Talk about when packets are being dropped
-TODO: What about spawning your own tasks within calculators?

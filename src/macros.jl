@@ -135,9 +135,38 @@ function _graph(graph_name, init_block)
 end
 
 """
-    @graph GraphName begin ... end
+    @graph <GraphName> begin ... end
 
-TODO
+Define a graph with a topology as specified in the `begin ... end` block.
+
+This defines a `struct <GraphName>` with a constructor that takes no arguments. In the `begin ... end` block, use [`@calculator`](@ref) to define a calculator and [`@bindstreams`](@ref) to bind the input streams of a calculator to the output streams of other calculators. All [`@calculator`](@ref) declarations must come before any [`@bindstreams`](@ref) declaration.
+
+# Examples
+
+```julia
+using Tissue
+
+struct SourceCalculator end
+Tissue.process(c::SourceCalculator) = 42
+
+struct WorkerCalculator end
+function Tissue.process(c::WorkerCalculator, num)
+    out = do_work(in_num)
+    println(out)
+end
+
+@graph NumberGraph begin
+    # 1. Declare calculators.
+    @calculator source  = SourceCalculator()
+    @calculator worker  = WorkerCalculator()
+
+    # 2. Declare the streams which connects the source to the worker
+    @bindstreams worker (num = source)
+end
+
+graph = NumberGraph()
+```
+
 """
 macro graph(graph_name, init_block)
     return _graph(graph_name, init_block)
@@ -157,9 +186,43 @@ function _calculator(assign_expr)
 end
 
 """
-    @calculator calculator_handle = CalculatorType(arg1, arg2)
+    @calculator calculator_handle = MyCalculator(arg1, arg2)
 
-TODO
+Create a calculator node in a graph.
+
+Marks the `calculator_handle` variable as a new calculator constructed by `MyCalculator(arg1, arg2)`, a user-defined struct. `calculator_handle` can then be used in a [`@bindstreams`](@ref) declaration to bind its input streams to the output streams of other calculators in the graph.
+
+There must be one and only one *source* calculator in a graph. The *source* calculator of a graph is the only calculator which has no input streams. It is called the *source* calculator because it generates the data that will be processed by the rest of the graph.
+
+Must be used in the `begin ... end` block of [`@graph`](@ref), before all [`@bindstreams`](@ref).
+
+# Examples
+```julia
+using Tissue
+
+mutable struct MySourceCalculator
+    last::Int64
+    MySourceCalculator() = new(0)
+end
+
+function Tissue.process(c::MySourceCalculator)
+    c.last += 1
+
+    c.last
+end
+
+struct SinkCalculator end
+function Tissue.process(c::SinkCalculator, number_stream)
+    println(num)
+end
+
+@graph PrinterGraph begin
+    @calculator source = MySourceCalculator()
+    @calculator sink = SinkCalculator()
+
+    @bindstreams sink (number_stream = source)
+end
+```
 """
 macro calculator(assign_expr)
     return _calculator(assign_expr)
@@ -175,7 +238,50 @@ end
 """
     @bindstreams calculator_handle (stream1 = calc1) (stream2 = calc2) ...
 
-TODO
+Bind the streams of `calculator_handle` to the output stream of other calculators in the graph.
+
+Multiple [`Tissue.process(calc)`](@ref) can be implemented for the same calculator type. `@bindstreams` selects the [`Tissue.process(calc)`](@ref) method to be used for calculator `calculator_handle` in this graph based on which named input streams are bound, and binds the output stream of the specified calculators to these input streams.
+
+`calculator_handle`, `calc1` and `calc2` are variables that were assigned to inside a [`@calculator`](@ref) declaration. `stream1` and `stream2` are named streams that were defined in a `process(c::CalculatorType, stream1, stream2)` method definition.
+
+Must be used in the `begin ... end` block of [`@graph`](@ref), after all [`@calculator`](@ref) declarations.
+
+# Examples
+```julia
+using Tissue
+
+struct SourceCalculator end
+Tissue.process(c::SourceCalculator) = 42
+
+struct MyCalculator end
+
+# This method will be selected by the `@bindstreams` declaration
+function Tissue.process(c::MyCalculator, stream1::Number)
+    println(stream1)
+    stream1
+end
+
+# This method will not be selected
+function Tissue.process(c::MyCalculator, stream1::Number, stream2::Number)
+    sum = stream1 + stream2
+    println(sum)
+    sum
+end
+
+# This method will not be selected
+function Tissue.process(c::MyCalculator, stream1::Number, stream2::Number, stream3::Number)
+    sum = stream1 + stream2 + stream3
+    println(sum)
+    sum
+end
+
+@graph MyGraph begin
+    @calculator source = SourceCalculator()
+    @calculator mycalc = MyCalculator()
+
+    @bindstreams mycalc (stream1 = source)
+end
+```
 """
 macro bindstreams(input_calculator, binding_exprs...)
     bindings = _capture_bindings([b for b in binding_exprs])

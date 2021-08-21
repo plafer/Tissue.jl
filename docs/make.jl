@@ -8,11 +8,13 @@ makedocs(
     pages = [
         "Introduction" => "index.md",
         "Getting Started" => "getting_started.md",
-        "Main Concepts" => "main_concepts.md",
         "API reference" => "api_reference.md",
-        "Design decision" => "design_decisions.md",
     ],
 )
+
+# TODO: Add sections for
+# 1. Main concepts
+# 2. Design decisions
 
 # Documenter can also automatically deploy documentation to gh-pages.
 # See "Hosting Documentation" and deploydocs() in the Documenter manual
