@@ -72,8 +72,13 @@ wait_until_done(graph)
 184
 235
 ```
+Feel free to run the code yourself. Remember that in Julia, you control the number of threads that get spawned when you run the program. See the `--threads` [command line option](https://docs.julialang.org/en/v1/manual/command-line-options/#command-line-options). To run the program with as many threads as your computer has CPUs, use
 
-There's a lot going on here, so let's parse through this example one bit at a time.
+```shell
+$ julia -t auto my_program.jl
+```
+
+Alright, back to the example. There's a lot going on here, so let's parse through this example one bit at a time.
 
 ```julia
 using Tissue
@@ -200,7 +205,7 @@ Finally, this blocks the main thread until the graph is done. In our case, this 
 
 That's all folks! Now, there's a thing or two we omitted in this example, so if you're hungry for more, follow me on to a more complicated example.
 
-## A more complicated example
+## A more useful example
 Let's look at a more realistic example. We will write a graph which reads from the camera, runs a face detector on the image, and renders a box around the detected faces. At any time, the user can select the video feed window on their desktop and press any key to stop the graph. We will convert [this example from OpenCV](https://github.com/opencv/opencv_contrib/blob/master/modules/julia/samples/face_detect_dnn.jl) into a Tissue.jl graph.
 
 ```julia
@@ -342,6 +347,3 @@ end
 Finally, the `process()` method for `ImageDisplayCalculator` introduces two new concepts. First, a reference to the current graph object can be obtained by adding a `graph` keyword argument to the `process()` method. In this case, we need it to call [`Tissue.stop(graph)`](@ref), the second new concept. [`Tissue.stop(graph)`](@ref) does as the name suggests: it stops the graph. This means a few things: the *source* calculator stops being called for new data packets, all packets that were generated are allowed to be processed by all calculators. After no more packets remain in the graph, if the main thread is blocked on a call to [`Tissue.wait_until_done(graph)`](@ref), [`Tissue.close(calculator)`](@ref) is called on every calculator. Although there is no race condition here: if the main thread calls [`Tissue.wait_until_done(graph)`](@ref) only after all calculators are done, [`Tissue.close(calculator)`](@ref) is also called on all calculators.
 
 And that's pretty much it! You should be good to go build awesome graphs now.
-
-TODO: You need to launch julia with as many threads as you want
-TODO: Talk about when packets are being dropped
