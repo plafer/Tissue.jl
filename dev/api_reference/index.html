@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>API reference · Tissue</title><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.039/juliamono-regular.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.11/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">Tissue</a></span></div><form class="docs-search" action="../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../">Introduction</a></li><li><a class="tocitem" href="../getting_started/">Getting Started</a></li><li class="is-active"><a class="tocitem" href>API reference</a><ul class="internal"><li><a class="tocitem" href="#Exported-functions"><span>Exported functions</span></a></li><li><a class="tocitem" href="#Exported-macros"><span>Exported macros</span></a></li><li><a class="tocitem" href="#Functions-to-be-implemented-by-user"><span>Functions to be implemented by user</span></a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>API reference</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>API reference</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/plafer/Tissue.jl/blob/master/docs/src/api_reference.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="API-reference"><a class="docs-heading-anchor" href="#API-reference">API reference</a><a id="API-reference-1"></a><a class="docs-heading-anchor-permalink" href="#API-reference" title="Permalink"></a></h1><h2 id="Exported-functions"><a class="docs-heading-anchor" href="#Exported-functions">Exported functions</a><a id="Exported-functions-1"></a><a class="docs-heading-anchor-permalink" href="#Exported-functions" title="Permalink"></a></h2><article class="docstring"><header><a class="docstring-binding" id="Tissue.start-Tuple{Graph}" href="#Tissue.start-Tuple{Graph}"><code>Tissue.start</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">start(graph)</code></pre><p>Start all the calculators and begin pulling data out of the source calculator.</p><p>All calculators run in their own <a href="https://docs.julialang.org/en/v1/base/parallel/#Tasks">task</a>. A call to <code>start(graph)</code> does not block; it returns after spawning all the tasks.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/plafer/Tissue.jl/blob/81d8cf30da2971808482062d2b4d38cabb679dbf/src/core.jl#L221-L227">source</a></section></article><article class="docstring"><header><a class="docstring-binding" id="Tissue.stop-Tuple{Graph}" href="#Tissue.stop-Tuple{Graph}"><code>Tissue.stop</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">stop(graph)</code></pre><p>Stop the graph gracefully. </p><p>The graph will stop pulling new data packets out of the <em>source</em> calculator, and all the tasks running calculators will exit after they are done processing the last generated packet.</p><p><a href="#Tissue.wait_until_done-Tuple{Graph}"><code>Tissue.wait_until_done(graph)</code></a> can be called in the main thread to block it until every calculator is fully terminated and closed.</p><p><strong>Examples</strong></p><pre><code class="language-julia hljs">using Tissue
+using MyGraphs: CoolestGraph
+
+graph = CoolestGraph()
+
+start(graph)
+sleep(5)
+stop(graph)
+wait_until_done(graph)</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/plafer/Tissue.jl/blob/81d8cf30da2971808482062d2b4d38cabb679dbf/src/graph.jl#L69-L90">source</a></section></article><article class="docstring"><header><a class="docstring-binding" id="Tissue.wait_until_done-Tuple{Graph}" href="#Tissue.wait_until_done-Tuple{Graph}"><code>Tissue.wait_until_done</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">wait_until_done(graph)</code></pre><p>Block the main thread until the graph is done.</p><p>Can only be called after <a href="#Tissue.start-Tuple{Graph}"><code>start(graph)</code></a> was called. This waits for all the calculators to be finished processing the last packet, and calls <a href="#Tissue.close-Tuple{Any}"><code>close(calculator)</code></a> for each calculator. This can occur either because <a href="#Tissue.stop-Tuple{Graph}"><code>stop(graph)</code></a> was called, or the source calculator indicated that it is done generating data by returning <code>nothing</code>.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/plafer/Tissue.jl/blob/81d8cf30da2971808482062d2b4d38cabb679dbf/src/graph.jl#L112-L119">source</a></section></article><article class="docstring"><header><a class="docstring-binding" id="Tissue.Graph" href="#Tissue.Graph"><code>Tissue.Graph</code></a> — <span class="docstring-category">Type</span></header><section><div><p>The parent type of all graphs.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/plafer/Tissue.jl/blob/81d8cf30da2971808482062d2b4d38cabb679dbf/src/graph.jl#L1-L3">source</a></section></article><h2 id="Exported-macros"><a class="docs-heading-anchor" href="#Exported-macros">Exported macros</a><a id="Exported-macros-1"></a><a class="docs-heading-anchor-permalink" href="#Exported-macros" title="Permalink"></a></h2><article class="docstring"><header><a class="docstring-binding" id="Tissue.@graph-Tuple{Any, Any}" href="#Tissue.@graph-Tuple{Any, Any}"><code>Tissue.@graph</code></a> — <span class="docstring-category">Macro</span></header><section><div><pre><code class="language-julia hljs">@graph &lt;GraphName&gt; begin ... end</code></pre><p>Define a graph with a topology as specified in the <code>begin ... end</code> block.</p><p>This defines a <code>struct &lt;GraphName&gt;</code> with a constructor that takes no arguments. In the <code>begin ... end</code> block, use <a href="#Tissue.@calculator-Tuple{Any}"><code>@calculator</code></a> to define a calculator and <a href="#Tissue.@bindstreams-Tuple{Any, Any}"><code>@bindstreams</code></a> to bind the input streams of a calculator to the output streams of other calculators. All <a href="#Tissue.@calculator-Tuple{Any}"><code>@calculator</code></a> declarations must come before any <a href="#Tissue.@bindstreams-Tuple{Any, Any}"><code>@bindstreams</code></a> declaration.</p><p><strong>Examples</strong></p><pre><code class="language-julia hljs">using Tissue
+
+struct SourceCalculator end
+Tissue.process(c::SourceCalculator) = 42
+
+struct WorkerCalculator end
+function Tissue.process(c::WorkerCalculator, num)
+    out = do_work(in_num)
+    println(out)
+end
+
+@graph NumberGraph begin
+    # 1. Declare calculators.
+    @calculator source  = SourceCalculator()
+    @calculator worker  = WorkerCalculator()
+
+    # 2. Declare the streams which connects the source to the worker
+    @bindstreams worker (num = source)
+end
+
+graph = NumberGraph()</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/plafer/Tissue.jl/blob/81d8cf30da2971808482062d2b4d38cabb679dbf/src/macros.jl#L137-L170">source</a></section></article><article class="docstring"><header><a class="docstring-binding" id="Tissue.@calculator-Tuple{Any}" href="#Tissue.@calculator-Tuple{Any}"><code>Tissue.@calculator</code></a> — <span class="docstring-category">Macro</span></header><section><div><pre><code class="language-julia hljs">@calculator calculator_handle = MyCalculator(arg1, arg2)</code></pre><p>Create a calculator node in a graph.</p><p>Marks the <code>calculator_handle</code> variable as a new calculator constructed by <code>MyCalculator(arg1, arg2)</code>, a user-defined struct. <code>calculator_handle</code> can then be used in a <a href="#Tissue.@bindstreams-Tuple{Any, Any}"><code>@bindstreams</code></a> declaration to bind its input streams to the output streams of other calculators in the graph.</p><p>There must be one and only one <em>source</em> calculator in a graph. The <em>source</em> calculator of a graph is the only calculator which has no input streams. It is called the <em>source</em> calculator because it generates the data that will be processed by the rest of the graph.</p><p>Must be used in the <code>begin ... end</code> block of <a href="#Tissue.@graph-Tuple{Any, Any}"><code>@graph</code></a>, before all <a href="#Tissue.@bindstreams-Tuple{Any, Any}"><code>@bindstreams</code></a>.</p><p><strong>Examples</strong></p><pre><code class="language-julia hljs">using Tissue
+
+mutable struct MySourceCalculator
+    last::Int64
+    MySourceCalculator() = new(0)
+end
+
+function Tissue.process(c::MySourceCalculator)
+    c.last += 1
+
+    c.last
+end
+
+struct SinkCalculator end
+function Tissue.process(c::SinkCalculator, number_stream)
+    println(num)
+end
+
+@graph PrinterGraph begin
+    @calculator source = MySourceCalculator()
+    @calculator sink = SinkCalculator()
+
+    @bindstreams sink (number_stream = source)
+end</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/plafer/Tissue.jl/blob/81d8cf30da2971808482062d2b4d38cabb679dbf/src/macros.jl#L188-L226">source</a></section></article><article class="docstring"><header><a class="docstring-binding" id="Tissue.@bindstreams-Tuple{Any, Any}" href="#Tissue.@bindstreams-Tuple{Any, Any}"><code>Tissue.@bindstreams</code></a> — <span class="docstring-category">Macro</span></header><section><div><pre><code class="language-julia hljs">@bindstreams calculator_handle (stream1 = calc1) (stream2 = calc2) ...</code></pre><p>Bind the streams of <code>calculator_handle</code> to the output stream of other calculators in the graph.</p><p>Multiple <a href="#Tissue.process-Tuple{Any}"><code>Tissue.process(calc)</code></a> can be implemented for the same calculator type. <code>@bindstreams</code> selects the <a href="#Tissue.process-Tuple{Any}"><code>Tissue.process(calc)</code></a> method to be used for calculator <code>calculator_handle</code> in this graph based on which named input streams are bound, and binds the output stream of the specified calculators to these input streams.</p><p><code>calculator_handle</code>, <code>calc1</code> and <code>calc2</code> are variables that were assigned to inside a <a href="#Tissue.@calculator-Tuple{Any}"><code>@calculator</code></a> declaration. <code>stream1</code> and <code>stream2</code> are named streams that were defined in a <code>process(c::CalculatorType, stream1, stream2)</code> method definition.</p><p>Must be used in the <code>begin ... end</code> block of <a href="#Tissue.@graph-Tuple{Any, Any}"><code>@graph</code></a>, after all <a href="#Tissue.@calculator-Tuple{Any}"><code>@calculator</code></a> declarations.</p><p><strong>Examples</strong></p><pre><code class="language-julia hljs">using Tissue
+
+struct SourceCalculator end
+Tissue.process(c::SourceCalculator) = 42
+
+struct MyCalculator end
+
+# This method will be selected by the `@bindstreams` declaration
+function Tissue.process(c::MyCalculator, stream1::Number)
+    println(stream1)
+    stream1
+end
+
+# This method will not be selected
+function Tissue.process(c::MyCalculator, stream1::Number, stream2::Number)
+    sum = stream1 + stream2
+    println(sum)
+    sum
+end
+
+# This method will not be selected
+function Tissue.process(c::MyCalculator, stream1::Number, stream2::Number, stream3::Number)
+    sum = stream1 + stream2 + stream3
+    println(sum)
+    sum
+end
+
+@graph MyGraph begin
+    @calculator source = SourceCalculator()
+    @calculator mycalc = MyCalculator()
+
+    @bindstreams mycalc (stream1 = source)
+end</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/plafer/Tissue.jl/blob/81d8cf30da2971808482062d2b4d38cabb679dbf/src/macros.jl#L238-L285">source</a></section></article><h2 id="Functions-to-be-implemented-by-user"><a class="docs-heading-anchor" href="#Functions-to-be-implemented-by-user">Functions to be implemented by user</a><a id="Functions-to-be-implemented-by-user-1"></a><a class="docs-heading-anchor-permalink" href="#Functions-to-be-implemented-by-user" title="Permalink"></a></h2><article class="docstring"><header><a class="docstring-binding" id="Tissue.process-Tuple{Any}" href="#Tissue.process-Tuple{Any}"><code>Tissue.process</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">process(calculator, ...; graph::Graph)</code></pre><p>Process the input streams into an output.</p><p>The first argument must be the associated calculator. Any other argument defines an input stream to the calculator. An input stream will be named with the exact same name as the corresponding argument. At all times, data coming from mutliple input streams into a <code>process()</code> method is guaranteed to be derived from the same datum generated by the <em>source</em> calculator.</p><p>Optionally, if you need a reference to the <code>graph</code> object in the <code>process()</code> method, you can add it as a keyword argument named <code>graph</code> and Tissue.jl will supply a reference to the active graph object.</p><p>The value returned from the method is the value sent to the calculator&#39;s output stream. Hence, any calculator that binds one of their input streams with <a href="#Tissue.@bindstreams-Tuple{Any, Any}"><code>@bindstreams</code></a> to this calculator&#39;s output stream will receive the return value of this method as an argument. <code>nothing</code> is treated specially: it means that the calculator will not process the given input. Any downstream calculator that depends on other calculators too will simply drop the value taken from their output stream.</p><p>It is important to remember that each calculator runs in its own task. Therefore, best practices about concurrency must be applied. Notably, the stream arguments of <code>process()</code> could possibly be accessed by multiple threads simultaneously. Therefore, it is highly recommended to make a <a href="https://docs.julialang.org/en/v1/base/base/#Base.deepcopy"><code>deepcopy</code></a> of an argument before mutating it. This will also make your calculator more reusable across graphs.</p><p>Multiple <code>process()</code> methods can be defined per calculator, allowing the calculator to be used in different graph topologies.</p><p><strong>Arguments</strong></p><ul><li><code>calculator</code>: the associated calculator</li><li><code>...</code>: the input streams</li></ul><p><strong>Examples</strong></p><pre><code class="language-julia hljs">using Base: deepcopy
+
+function process(calc::MyCalculator, in_stream; graph)
+    if some_condition
+        stop(graph)
+    end
+
+    in_stream_copy = deepcopy(in_stream)
+
+    mutate(in_stream_copy)
+
+    return in_stream_copy
+end</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/plafer/Tissue.jl/blob/81d8cf30da2971808482062d2b4d38cabb679dbf/src/Tissue.jl#L9-L44">source</a></section></article><article class="docstring"><header><a class="docstring-binding" id="Tissue.close-Tuple{Any}" href="#Tissue.close-Tuple{Any}"><code>Tissue.close</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">close(calculator)</code></pre><p>Perform cleanup for the calculator. Optional.</p><p>You can define a method for your calculator type to perform any necessary cleanup. Called by <a href="#Tissue.wait_until_done-Tuple{Graph}"><code>wait_until_done(graph)</code></a> on each calculator to perform cleanup.</p><p><strong>Examples</strong></p><pre><code class="language-julia hljs">struct GoofyCalculator 
+    resource
+    function GoofyCalculator() 
+        resource = acquire_resource()
+        new(resource)
+    end
+end
+
+function process(c::GoofyCalculator, some_stream)
+    use_resource(c.resource)
+end
+
+function close(c::GoofyCalculator)
+    release_resource(c.resource)
+end</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/plafer/Tissue.jl/blob/81d8cf30da2971808482062d2b4d38cabb679dbf/src/Tissue.jl#L49-L74">source</a></section></article></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../getting_started/">« Getting Started</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.5 on <span class="colophon-date" title="Monday 23 August 2021 23:43">Monday 23 August 2021</span>. Using Julia version 1.6.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
