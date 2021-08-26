@@ -15,4 +15,5 @@ makedocs(
 
 deploydocs(
     repo = "github.com/plafer/Tissue.jl.git",
+    push_preview = true,
 )
