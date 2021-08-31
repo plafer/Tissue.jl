@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Getting Started · Tissue</title><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.039/juliamono-regular.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.11/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">Tissue</a></span></div><form class="docs-search" action="../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../">Introduction</a></li><li class="is-active"><a class="tocitem" href>Getting Started</a><ul class="internal"><li><a class="tocitem" href="#A-simple-example"><span>A simple example</span></a></li><li><a class="tocitem" href="#A-more-useful-example"><span>A more useful example</span></a></li></ul></li><li><a class="tocitem" href="../api_reference/">API reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Getting Started</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Getting Started</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/plafer/Tissue.jl/blob/master/docs/src/getting_started.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Getting-Started"><a class="docs-heading-anchor" href="#Getting-Started">Getting Started</a><a id="Getting-Started-1"></a><a class="docs-heading-anchor-permalink" href="#Getting-Started" title="Permalink"></a></h1><h2 id="A-simple-example"><a class="docs-heading-anchor" href="#A-simple-example">A simple example</a><a id="A-simple-example-1"></a><a class="docs-heading-anchor-permalink" href="#A-simple-example" title="Permalink"></a></h2><p>We will build a graph with the following topology.</p><p><img src="../img/example_graph.jpg" alt="Example graph"/></p><p>The corresponding code to build that graph would be:</p><pre><code class="language-julia hljs">using Tissue
+
+mutable struct SourceCalculator 
+    count::Int64
+    SourceCalculator() = new(0)
+end
+
+function Tissue.process(c::SourceCalculator)
+    c.count += 1
+    if c.count &gt; 5
+        # Indicates that the data stream is closed.
+        # This is the last time that the function will be called
+        return nothing
+    end
+
+    return c.count
+end
+
+struct AddConstantCalculator
+    constant::Int
+end
+
+function Tissue.process(c::AddConstantCalculator, num_in::Int)::Int
+    return num_in + c.constant
+end
+
+struct MultiplyCalculator end
+
+function Tissue.process(c::MultiplyCalculator, first_num::Int, second_num::Int)::Int
+    return first_num * second_num
+end
+
+struct PrinterCalculator end
+
+function Tissue.process(c::PrinterCalculator, num_to_print)
+    println(num_to_print)
+end
+
+@graph NumberGraph begin
+    # 1. Declare calculators.
+    @calculator source  = SourceCalculator()
+    @calculator add0    = AddConstantCalculator(0)
+    @calculator add42   = AddConstantCalculator(42)
+    @calculator mult    = MultiplyCalculator()
+    @calculator printer = PrinterCalculator()
+
+    # 2. Declare the streams which connect the calculators together
+    @bindstreams add0 (num_in = source)
+    @bindstreams add42 (num_in = source)
+    @bindstreams mult (first_num = add0) (second_num = add42)
+    @bindstreams printer (num_to_print = mult)
+end
+
+graph = NumberGraph()
+start(graph)
+wait_until_done(graph)
+
+# output
+43
+88
+135
+184
+235</code></pre><p>Feel free to run the code yourself. Remember that in Julia, you control the number of threads that get spawned when you run the program. See the <code>--threads</code> <a href="https://docs.julialang.org/en/v1/manual/command-line-options/#command-line-options">command line option</a>. To run the program with as many threads as your computer has CPUs, use</p><pre><code class="language-shell hljs">$ julia -t auto my_program.jl</code></pre><p>Alright, back to the example. There&#39;s a lot going on here, so let&#39;s parse through this example one bit at a time.</p><pre><code class="language-julia hljs">using Tissue</code></pre><p>This brings the functions and macros we are going to need into scope: </p><ul><li><code>start()</code> launches all the calculators, each in its own task, and starts pulling data from the <em>source</em> calculator</li><li><code>wait_until_done()</code> blocks the main thread until the source stops generating data, and all calculators are done processing.</li><li><code>@graph</code> defines a graph, concretely a <code>struct NumberGraph</code>, with a topology as described in the <code>begin ... end</code> block.</li><li><code>@calculator</code> declares a new node in the graph corresponding to a calculator object of any type.</li><li><code>@bindstreams</code> declares the edges in the graph. To define an edge, one specifies the output of a calculator with a named input stream of another calculator.</li></ul><pre><code class="language-julia hljs">mutable struct SourceCalculator 
+    count::Int64
+    SourceCalculator() = new(0)
+end</code></pre><p>This defines a calculator type which we will use to instantiate our <em>source</em> calculator. The source calculator is the one and only node in the graph which has no input streams. It is equally an error to instantiate more than one, or none at all. As you can see, there&#39;s nothing special about the type. More on the source calculator when we get to the graph definition.</p><pre><code class="language-julia hljs">function Tissue.process(c::SourceCalculator)
+    c.count += 1
+    if c.count &gt; 5
+        # Indicates that the data stream is closed.
+        # This is the last time that the function will be called
+        return nothing
+    end
+
+    return c.count
+end</code></pre><p>This is the crux of it all. We specify how a calculator of type <code>X</code> goes from input to output by adding a method to the <code>Tissue.process()</code> function; that is, the <code>process()</code> function that lives in the <code>Tissue</code> module. The convention is that the first argument to the function needs to be of type <code>X</code>, and the rest of the arguments define the streams which the calculator accepts. In this case, there are no streams, because we intend to use this calculator as our source calculator.</p><p>Note that more than one <code>Tissue.process(c::X, ...)</code> can be implemented. This is how you let the same calculator accept different streams, depending on the graph it is to be used in.</p><pre><code class="language-julia hljs">struct AddConstantCalculator
+    constant::Int
+end
+
+function Tissue.process(c::AddConstantCalculator, num_in::Int)::Int
+    return num_in + c.constant
+end</code></pre><p>We define a new calculator type called <code>AddConstantCalculator</code>. There is one difference with the source calculator though: its <code>process()</code> method accepts one stream named <code>num_in</code>. This is key. The name of the arguments in a <code>process()</code> method matter. They name a stream that will later be used when defining the graph topology with the <code>@graph</code> and <code>@bindstreams</code> macros. More on this later.</p><p>Here, we specified the type of the stream and the return type of <code>process()</code> for documentation purposes; they are by no means required.</p><pre><code class="language-julia hljs">struct MultiplyCalculator end
+
+function Tissue.process(c::MultiplyCalculator, first_num::Int, second_num::Int)::Int
+    return first_num * second_num
+end</code></pre><p>We define a new calculator type called <code>MultiplyCalculator</code>, as well as a <code>process()</code> which now takes 2 stream arguments. This is interesting. Remember that all calculators in the graph run concurrently. Then, both values are going to arrive at this calculator at different points in time. As a result, Tissue.jl buffers the data until at least one packet per stream has arrived, after which it calls this <code>process()</code> method. This complexity taken care for you is one of the perks of Tissue.jl.</p><pre><code class="language-julia hljs">struct PrinterCalculator end
+
+function Tissue.process(c::PrinterCalculator, num_to_print)
+    println(num_to_print)
+end</code></pre><p>Come to our final calculator type, <code>PrinterCalculator</code>. Nothing new here, except to show that really, all computation, including I/O calls, happens within calculators.</p><pre><code class="language-julia hljs">@graph NumberGraph begin</code></pre><p>Finally, we get to the graph definition. The <code>@graph</code> macro takes 2 arguments: The name of the type, <code>NumberGraph</code>, and a code block in which we use <code>@calculator</code> and <code>@bindstreams</code> to define the topology; that is, the nodes and edges of the graph.</p><pre><code class="language-julia hljs">    # 1. Declare calculators.
+    @calculator source  = SourceCalculator()</code></pre><p>This defines a new calculator object of type <code>SourceCalculator</code>, and <code>source</code> is the variable that refers to it. This looks like and is a simple variable assignment as you know it, using the <code>SourceCalculator</code> struct constructor that you defined. The default one in this case.</p><pre><code class="language-julia hljs">    @calculator add0    = AddConstantCalculator(0)
+    @calculator add42   = AddConstantCalculator(42)
+    @calculator mult    = MultiplyCalculator()
+    @calculator printer = PrinterCalculator()</code></pre><p>Similarly, this defines four new calculator objects. Note that <code>add0</code> and <code>add42</code> are two calculators of the same type.</p><pre><code class="language-julia hljs">    # 2. Declare the streams which connect the calculators together
+    @bindstreams add0 (num_in = source)</code></pre><p>We get to our first <code>@bindstreams</code> declaration. The purpose of <code>@bindstreams</code> is to encode, for each calculator in our graph, where the data comes from for each stream. Here, the <code>add0</code>&#39;s input stream called <code>num_in</code> will have its data come from the output stream of <code>source</code>. The parentheses around <code>num_in = source</code> are optional; we add them for clarity. Visually, this adds an edge in the graph from <code>source</code> to <code>add0</code>. As a reminder, we declared the stream <code>num_in</code> when we defined the <code>process(c::AddConstantCalculator, num_in::Int)</code> method.</p><pre><code class="language-julia hljs">    @bindstreams add42 (num_in = source)</code></pre><p>This declaration is analogous to the previous one.</p><pre><code class="language-julia hljs">    @bindstreams mult (first_num = add0) (second_num = add42)</code></pre><p>The <code>process()</code> method that we defined for the <code>MultiplyCalculator</code> defines two streams: <code>first_num</code> and <code>second_num</code>. Therefore, the <code>@bindstreams</code> declaration must bind the output of a calculator to each of them. By now, you probably figured out what this does: it takes the output of <code>add0</code> and sends it in <code>mult</code>&#39;s <code>first_num</code> stream, and similarly for <code>add42</code> in the <code>second_num</code> stream.</p><pre><code class="language-julia hljs">    @bindstreams printer (num_to_print = mult)
+end</code></pre><p>This is the final <code>@bindstreams</code> declaration, which completes the graph definition! We defined all of our calculators and how they interact. Note that we didn&#39;t bind any stream to <code>source</code>, which tells <code>Tissue.jl</code> that this is the calculator we intend to use as our <em>source</em> calculator.</p><pre><code class="language-julia hljs">graph = NumberGraph()</code></pre><p>We now get to actually use our graph! The <code>@graph</code> macro created a <code>struct NumberGraph</code> with a default constructor. We thus instantiate a new graph simply by creating an object of type <code>NumberGraph</code>.</p><pre><code class="language-julia hljs">start(graph)</code></pre><p>This call starts every calculator in its own task and starts pulling data from the <em>source</em> calculator. It returns immediately.</p><pre><code class="language-julia hljs">wait_until_done(graph)</code></pre><p>Finally, this blocks the main thread until the graph is done. In our case, this happens when our <em>source</em> returns <code>nothing</code>, indicating that it is done generating data. <code>wait_until_done</code> will wait until all the calculators are finished processing the last packet, cleanup and return.</p><p>That&#39;s all folks! Now, there&#39;s a thing or two we omitted in this example, so if you&#39;re hungry for more, follow me on to a more complicated example.</p><h2 id="A-more-useful-example"><a class="docs-heading-anchor" href="#A-more-useful-example">A more useful example</a><a id="A-more-useful-example-1"></a><a class="docs-heading-anchor-permalink" href="#A-more-useful-example" title="Permalink"></a></h2><p>Let&#39;s look at a more realistic example. We will write a graph which reads from the camera, runs a face detector on the image, and renders a box around the detected faces. At any time, the user can select the video feed window on their desktop and press any key to stop the graph. We will convert <a href="https://github.com/opencv/opencv_contrib/blob/master/modules/julia/samples/face_detect_dnn.jl">this example from OpenCV</a> into a Tissue.jl graph.</p><pre><code class="language-julia hljs">using Tissue
+using OpenCV
+cv = OpenCV
+
+struct CameraCalculator
+    cap::cv.VideoCaptureAllocated
+
+    function CameraCalculator()
+        cap = cv.VideoCapture(Int32(0))
+        new(cap)
+    end
+end
+
+function Tissue.process(calc::CameraCalculator)
+    ok, img = cv.read(calc.cap)
+    ok ? img : nothing
+end
+
+function Tissue.close(calc::CameraCalculator)
+    cv.release(calc.cap)
+end
+
+struct FaceDetectionCalculator
+    net
+
+    function FaceDetectionCalculator()
+        net = cv.dnn_DetectionModel(
+            &quot;assets/opencv_face_detector.pbtxt&quot;,
+            &quot;assets/opencv_face_detector_uint8.pb&quot;,
+        )
+        size0 = Int32(300)
+        cv.dnn.setInputMean(net, (104, 177, 123))
+        cv.dnn.setInputScale(net, 1.0)
+        cv.dnn.setInputSize(net, size0, size0)
+
+        new(net)
+    end
+end
+
+function Tissue.process(calc::FaceDetectionCalculator, in_frame)
+    classIds, confidences, boxes =
+        cv.dnn.detect(calc.net, in_frame, confThreshold = Float32(0.5))
+
+    (confidences, boxes)
+end
+
+struct FaceRendererCalculator end
+
+function Tissue.process(calc::FaceRendererCalculator, in_frame, confidences_and_boxes)
+    confidences, boxes = confidences_and_boxes
+
+    out_frame = deepcopy(in_frame)
+
+    for i in 1:size(boxes,1)
+        confidence = confidences[i]
+        x0 = Int32(boxes[i].x)
+        y0 = Int32(boxes[i].y)
+        x1 = Int32(boxes[i].x+boxes[i].width)
+        y1 = Int32(boxes[i].y+boxes[i].height)
+        cv.rectangle(out_frame, cv.Point{Int32}(x0, y0), cv.Point{Int32}(x1, y1), (100, 255, 100); thickness = Int32(5))
+        label = &quot;face: &quot; * string(confidence)
+        lsize, bl = cv.getTextSize(label, cv.FONT_HERSHEY_SIMPLEX, 0.5, Int32(1))
+        cv.rectangle(out_frame, cv.Point{Int32}(x0,y0), cv.Point{Int32}(x0+lsize.width, y0+lsize.height+bl), (100,255,100); thickness = Int32(-1))
+        cv.putText(out_frame, label, cv.Point{Int32}(x0, y0 + lsize.height),
+        cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0); thickness = Int32(1), lineType = cv.LINE_AA)
+    end
+
+    out_frame
+end
+
+struct ImageDisplayCalculator end
+
+function Tissue.process(calc::ImageDisplayCalculator, rendered_frame; graph::Graph)
+    cv.imshow(&quot;detections&quot;, rendered_frame)
+
+    if cv.waitKey(Int32(1)) &gt;= 0
+        stop(graph)
+    end
+end
+
+@graph FaceGraph begin
+    @calculator source = CameraCalculator()
+    @calculator face_detector = FaceDetectionCalculator()
+    @calculator renderer = FaceRendererCalculator()
+    @calculator displayer = ImageDisplayCalculator()
+
+    @bindstreams face_detector (in_frame = source)
+    @bindstreams renderer (in_frame = source) (confidences_and_boxes = face_detector)
+    @bindstreams displayer (rendered_frame = renderer)
+end
+
+function main()
+    graph = FaceGraph()
+    start(graph)
+    wait_until_done(graph)
+    println(&quot;Thanks for listening!&quot;)
+end
+
+main()</code></pre><p>You can actually run this yourself! Just make sure you install the <code>OpenCV</code> package first (simply type <code>add OpenCV</code> on julia&#39;s <code>pkg</code> REPL).</p><p>We will focus on the bits that were not covered in the <a href="#A-simple-example">previous example</a>.</p><pre><code class="language-julia hljs">function Tissue.close(calc::CameraCalculator)
+    cv.release(calc.cap)
+end</code></pre><p>To clean up resources acquired in a calculator constructor when the graph stops, implement <code>Tissue.close(::CalculatorType)</code> with the corresponding calculator type. It will be called in <a href="../api_reference/#Tissue.wait_until_done-Tuple{Graph}"><code>wait_until_done(graph)</code></a> after all the calculators are done running.</p><pre><code class="language-julia hljs">function Tissue.process(calc::FaceRendererCalculator, in_frame, confidences_and_boxes)
+    confidences, boxes = confidences_and_boxes
+
+    out_frame = deepcopy(in_frame)
+
+    for i in 1:size(boxes,1)
+        ...
+    end
+
+    out_frame
+end</code></pre><p>The <code>process()</code> method for the <code>FaceRendererCalculator</code> highlights an important fact: data coming from the input streams could be accessed by multiple threads simultaneously since calculators run in their own <a href="https://docs.julialang.org/en/v1/base/parallel/#Tasks"><code>task</code></a>. Therefore, we treat the data coming from input streams as immutable. Since we want to mutate it here, we first make a <a href="https://docs.julialang.org/en/v1/base/base/#Base.deepcopy"><code>deepcopy</code></a>.</p><pre><code class="language-julia hljs">function Tissue.process(calc::ImageDisplayCalculator, rendered_frame; graph::Graph)
+    cv.imshow(&quot;detections&quot;, rendered_frame)
+
+    if cv.waitKey(Int32(1)) &gt;= 0
+        stop(graph)
+    end
+end</code></pre><p>Finally, the <code>process()</code> method for <code>ImageDisplayCalculator</code> introduces two new concepts. First, a reference to the current graph object can be obtained by adding a <code>graph</code> keyword argument to the <code>process()</code> method. In this case, we need it to call <a href="../api_reference/#Tissue.stop-Tuple{Graph}"><code>Tissue.stop(graph)</code></a>, the second new concept. <a href="../api_reference/#Tissue.stop-Tuple{Graph}"><code>Tissue.stop(graph)</code></a> does as the name suggests: it stops the graph. This means a few things: the <em>source</em> calculator stops being called for new data packets, all packets that were generated are allowed to be processed by all calculators. After no more packets remain in the graph, if the main thread is blocked on a call to <a href="../api_reference/#Tissue.wait_until_done-Tuple{Graph}"><code>Tissue.wait_until_done(graph)</code></a>, <a href="../api_reference/#Tissue.close-Tuple{Any}"><code>Tissue.close(calculator)</code></a> is called on every calculator. Although there is no race condition here: if the main thread calls <a href="../api_reference/#Tissue.wait_until_done-Tuple{Graph}"><code>Tissue.wait_until_done(graph)</code></a> only after all calculators are done, <a href="../api_reference/#Tissue.close-Tuple{Any}"><code>Tissue.close(calculator)</code></a> is also called on all calculators.</p><p>And that&#39;s pretty much it! You should be good to go build awesome graphs now.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Introduction</a><a class="docs-footer-nextpage" href="../api_reference/">API reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.5 on <span class="colophon-date" title="Tuesday 31 August 2021 00:34">Tuesday 31 August 2021</span>. Using Julia version 1.6.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
