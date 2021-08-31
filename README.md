@@ -6,7 +6,7 @@ In Tissue.jl, computations to be done on an input stream are described by a dire
 
 # Documentation
 
-Our documentation is hosted [here](https://plafer.github.io/Tissue.jl/dev).
+Our documentation is hosted [here](https://plafer.github.io/Tissue.jl/stable).
 
 # Contributors
 Want to contribute to Tissue.jl? Great! Head over to the Issues tab to get a feel for where the project is headed, or just start hacking right away on whatever you like! Pull Requests will be greatly appreciated.
