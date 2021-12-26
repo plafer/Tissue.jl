@@ -1,3 +1,4 @@
+![logo](/docs/src/assets/logo.png)
 # Tissue.jl
 [![](https://img.shields.io/badge/docs-stable-blue.svg)](https://plafer.github.io/Tissue.jl/stable)
 [![](https://img.shields.io/badge/docs-dev-blue.svg)](https://plafer.github.io/Tissue.jl/dev)
